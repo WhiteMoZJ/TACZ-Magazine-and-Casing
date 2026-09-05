@@ -1,0 +1,8 @@
+{
+  "config.magazine_casing.enableMagazineDrop": "Enable Magazine Drop",
+  "config.magazine_casing.enableMagazineDrop.description": "If true, reloading a magazine-fed gun from empty spawns a dropped magazine entity.",
+  "config.magazine_casing.magazineDespawnTicks": "Magazine Despawn Ticks",
+  "config.magazine_casing.magazineDespawnTicks.description": "How many ticks a dropped magazine stays in the world before despawning (20 ticks = 1 second).",
+  "config.magazine_casing.magazineDropBlacklist": "Magazine Drop Blacklist",
+  "config.magazine_casing.magazineDropBlacklist.description": "Gun IDs that must never drop a magazine on empty reload."
+}

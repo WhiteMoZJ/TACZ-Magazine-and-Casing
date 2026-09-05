@@ -1,0 +1,8 @@
+{
+  "config.magazine_casing.enableMagazineDrop": "启用弹匣掉落",
+  "config.magazine_casing.enableMagazineDrop.description": "若为 true，弹匣供弹的枪械空仓换弹时会掉落一个弹匣实体。",
+  "config.magazine_casing.magazineDespawnTicks": "弹匣消失时间",
+  "config.magazine_casing.magazineDespawnTicks.description": "掉落弹匣在消失前会停留的时间（tick，20 tick = 1 秒）。",
+  "config.magazine_casing.magazineDropBlacklist": "弹匣掉落黑名单",
+  "config.magazine_casing.magazineDropBlacklist.description": "空仓换弹时不掉落弹匣的枪械 ID 列表。"
+}

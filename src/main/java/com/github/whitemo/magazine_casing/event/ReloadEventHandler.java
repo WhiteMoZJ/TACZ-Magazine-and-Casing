@@ -67,6 +67,10 @@ public class ReloadEventHandler {
         if (gunId == null) {
             return;
         }
+        if (ModConfigs.SERVER.magazineDropBlacklist.get().contains(gunId.toString())) {
+            // Gun is blacklisted: never drop a magazine for it.
+            return;
+        }
 
         GunData gunData = TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getGunData())
@@ -80,7 +84,7 @@ public class ReloadEventHandler {
             return;
         }
         if (iGun.getCurrentAmmoCount(gun) != 0) {
-            // Empty-magazine reload only (空仓换弹).
+            // Empty-magazine reload only.
             return;
         }
 
@@ -128,7 +132,7 @@ public class ReloadEventHandler {
 
     private static void spawnMagazine(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
                                       ResourceLocation displayId, int magazineLevel) {
-        Vec3 pos = shooter.getEyePosition().add(0.0D, -0.3D, 0.0D);
+        Vec3 pos = shooter.getEyePosition().add(0.0D, -0.4D, 0.0D);
         MagazineEntity magazine = new MagazineEntity(ModEntities.MAGAZINE.get(), level);
         magazine.setPos(pos.x, pos.y, pos.z);
         magazine.setGunId(gunId);
