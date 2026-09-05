@@ -12,5 +12,9 @@
   "config.magazine_casing.maxCasingCount": "弹壳最大数量",
   "config.magazine_casing.maxCasingCount.description": "弹壳实体最大同时存在数量。",
   "config.magazine_casing.enableCasingDrop": "启用弹壳掉落",
-  "config.magazine_casing.enableCasingDrop.description": "弹壳掉落总开关：是否在开火时掉落弹壳实体。"
+  "config.magazine_casing.enableCasingDrop.description": "弹壳掉落总开关：是否在开火时掉落弹壳实体。",
+  "config.magazine_casing.casingDropBlacklist": "弹壳掉落黑名单",
+  "config.magazine_casing.casingDropBlacklist.description": "射击时不掉落弹壳的枪械 ID 列表。",
+  "config.magazine_casing.reloadCasingDrops": "换弹弹壳掉落",
+  "config.magazine_casing.reloadCasingDrops.description": "换弹时掉落弹壳的枪械，格式 \"gunId|弹壳数量\"。"
 }

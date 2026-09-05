@@ -25,7 +25,7 @@ public class CasingEntity extends AbstractDroppedEntity {
     private static final double BOUNCE_Y = 0.55D;
     private static final double BOUNCE_SCALE = 0.65D;
     private static final double AIR_DRAG = 0.985D;
-    private static final double GROUND_FRICTION = 0.78D;
+    private static final double GROUND_FRICTION = 0.38D;
     private static final double REST_SPEED_SQR = 0.00018D;
     private static final double BOUNCE_LOSS = 0.015D;
 

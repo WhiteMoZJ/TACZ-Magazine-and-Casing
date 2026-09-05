@@ -44,6 +44,10 @@ public class ModConfigs {
         public final ForgeConfigSpec.IntValue casingDespawnTicks;
         /** 弹壳最大同时存在数量。 */
         public final ForgeConfigSpec.IntValue maxCasingCount;
+        /** 射击时弹壳掉落黑名单。 */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> casingDropBlacklist;
+        /** 换弹时掉落弹壳（gunid|count）。 */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> reloadCasingDrops;
 
         public ServerConfig(ForgeConfigSpec.Builder builder) {
             builder.push("magazine");
@@ -75,7 +79,7 @@ public class ModConfigs {
                             "tacz:m870", "tacz:spas_12", "tacz:m1014", "hare:aek965", "hare:terminator",
                             "hare:ksg", "hare:striker", "hare:dp12", "rfp:reapr", "tacz:minigun",
                             "classicr:minigun", "classicr:mgl_40mm", "ccrp:lmt_m203", "tacz:rpg7",
-                            "tacz:m320", "hare:m18rr", "rcp:rpg26", "rcp:at4", "jak:airstrike"),
+                            "tacz:m320", "hare:m18rr", "rcp:rpg26", "rcp:at4", "jak:airstrike", "tacz:kar98", "ccrp:lastwar"),
                             value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
 
             magazineModelReplacements = builder
@@ -87,7 +91,7 @@ public class ModConfigs {
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
-                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|tacz:ai_awp"),
+                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr", "tacz:ai_awp|classicr:msr"),
                             ServerConfig::isModelReplacementEntry);
             builder.pop();
 
@@ -109,6 +113,25 @@ public class ModConfigs {
                             "弹壳实体最大同时存在数量。")
                     .translation("config.magazine_casing.maxCasingCount")
                     .defineInRange("maxCasingCount", 30, 1, Integer.MAX_VALUE);
+
+            casingDropBlacklist = builder
+                    .comment("Gun IDs that must not eject a shell casing when firing.",
+                            "射击时不掉落弹壳的枪械 ID 列表（与换弹掉壳设置互不影响）。")
+                    .translation("config.magazine_casing.casingDropBlacklist")
+                    .defineListAllowEmpty("casingDropBlacklist", List.of("tacz:lonetrail", "classicr:colt_python", "ccrp:requiem",
+                                    "tacz:taurus500", "tacz:rhino357", "tacz:taurus943", "hare:switchgun", "tacz:db_short", "tacz:db_long",
+                                    "hare:m1216", "tacz:springfield1873", "ccrp:mp9_thunder", "ccrp:camg_dexterous"),
+                            value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
+
+            reloadCasingDrops = builder
+                    .comment("Guns that eject shell casings on reload. Each entry is \"gunId|count\".",
+                            "换弹时掉落弹壳的枪械，格式 \"gunId|弹壳数量\"。")
+                    .translation("config.magazine_casing.reloadCasingDrops")
+                    .defineListAllowEmpty("reloadCasingDrops", List.of("tacz:lonetrail|1", "tacz:db_short|2", "tacz:db_long|2",
+                                    "tacz:springfield1873|1", "kpp:870mcs|1", "kpp:870magpul_1|1", "kpp:870magpul|1", "kpp:870_t|1",
+                                    "kpp:870ll|1", "ccrp:lastwar|1", "tacz:m870|1", "tacz:spas_12|1", "hare:terminator|1", "hare:aek965|1",
+                                    "ccrp:m1887_long"),
+                            ServerConfig::isReloadCasingEntry);
             builder.pop();
 
             builder.push("debug");
@@ -128,6 +151,24 @@ public class ModConfigs {
             }
             return ResourceLocation.tryParse(s.substring(0, sep).trim()) != null
                     && ResourceLocation.tryParse(s.substring(sep + 1).trim()) != null;
+        }
+
+        private static boolean isReloadCasingEntry(Object value) {
+            if (!(value instanceof String s)) {
+                return false;
+            }
+            int sep = s.indexOf('|');
+            if (sep <= 0 || sep == s.length() - 1) {
+                return false;
+            }
+            if (ResourceLocation.tryParse(s.substring(0, sep).trim()) == null) {
+                return false;
+            }
+            try {
+                return Integer.parseInt(s.substring(sep + 1).trim()) > 0;
+            } catch (NumberFormatException e) {
+                return false;
+            }
         }
     }
 }

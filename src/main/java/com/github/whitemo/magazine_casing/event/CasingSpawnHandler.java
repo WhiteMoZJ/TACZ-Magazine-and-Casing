@@ -60,6 +60,9 @@ public class CasingSpawnHandler {
         if (gunId == null) {
             return;
         }
+        if (ModConfigs.SERVER.casingDropBlacklist.get().contains(gunId.toString())) {
+            return; // 射击时弹壳掉落黑名单
+        }
 
         GunData gunData = TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getGunData())
@@ -96,6 +99,15 @@ public class CasingSpawnHandler {
             return; // 没有已击发的弹壳
         }
         spawnCasing(level, shooter, ammoId);
+    }
+
+    /**
+     * 掉落 count 个弹壳（用于换弹掉壳等场景）。
+     */
+    public static void dropCasings(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId, int count) {
+        for (int i = 0; i < count; i++) {
+            spawnCasing(level, shooter, ammoId);
+        }
     }
 
     private static void spawnCasing(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId) {

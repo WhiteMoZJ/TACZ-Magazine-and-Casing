@@ -70,6 +70,21 @@ public class ReloadEventHandler {
         if (gunId == null) {
             return;
         }
+
+        // 换弹时掉落弹壳（gunid|count），与弹匣掉落互相独立
+        if (ModConfigs.SERVER.enableCasingDrop.get()) {
+            int reloadCasingCount = getReloadCasingCount(gunId);
+            if (reloadCasingCount > 0 && iGun.getCurrentAmmoCount(gun) == 0) {
+                ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
+                        .map(index -> index.getGunData().getAmmoId())
+                        .orElse(null);
+                if (ammoId != null) {
+                    CasingSpawnHandler.dropCasings(level, shooter, ammoId, reloadCasingCount);
+                }
+                return; // 换弹掉壳，不再走弹匣掉落
+            }
+        }
+
         if (ModConfigs.SERVER.magazineDropBlacklist.get().contains(gunId.toString())) {
             // Gun is blacklisted: never drop a magazine for it.
             return;
@@ -128,6 +143,26 @@ public class ReloadEventHandler {
             }
         }
         return null;
+    }
+
+    private static int getReloadCasingCount(ResourceLocation gunId) {
+        String target = gunId.toString();
+        for (String entry : ModConfigs.SERVER.reloadCasingDrops.get()) {
+            int sep = entry.indexOf('|');
+            if (sep <= 0) {
+                continue;
+            }
+            String left = entry.substring(0, sep).trim();
+            String right = entry.substring(sep + 1).trim();
+            if (left.equals(target)) {
+                try {
+                    return Integer.parseInt(right);
+                } catch (NumberFormatException ignored) {
+                    return 0;
+                }
+            }
+        }
+        return 0;
     }
 
     @SubscribeEvent

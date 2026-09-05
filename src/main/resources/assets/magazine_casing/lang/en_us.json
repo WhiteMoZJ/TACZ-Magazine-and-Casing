@@ -12,5 +12,9 @@
   "config.magazine_casing.maxCasingCount": "Max Casing Count",
   "config.magazine_casing.maxCasingCount.description": "Maximum number of shell casing entities that can exist at once.",
   "config.magazine_casing.enableCasingDrop": "Enable Casing Drop",
-  "config.magazine_casing.enableCasingDrop.description": "Master switch: whether firing ejects a shell casing entity."
+  "config.magazine_casing.enableCasingDrop.description": "Master switch: whether firing ejects a shell casing entity.",
+  "config.magazine_casing.casingDropBlacklist": "Casing Drop Blacklist",
+  "config.magazine_casing.casingDropBlacklist.description": "Gun IDs that must not eject a shell casing when firing.",
+  "config.magazine_casing.reloadCasingDrops": "Reload Casing Drops",
+  "config.magazine_casing.reloadCasingDrops.description": "Guns that eject shell casings on reload, using \"gunId|count\"."
 }
