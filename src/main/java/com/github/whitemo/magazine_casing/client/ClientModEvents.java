@@ -13,5 +13,6 @@ public class ClientModEvents {
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.MAGAZINE.get(), MagazineEntityRenderer::new);
+        event.registerEntityRenderer(ModEntities.CASING.get(), CasingEntityRenderer::new);
     }
 }

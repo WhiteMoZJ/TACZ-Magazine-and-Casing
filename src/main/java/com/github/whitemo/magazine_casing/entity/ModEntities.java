@@ -21,4 +21,14 @@ public class ModEntities {
                     .updateInterval(1)
                     .setShouldReceiveVelocityUpdates(true)
                     .build(MagazineAndCasing.MOD_ID + ":magazine"));
+
+    public static final RegistryObject<EntityType<CasingEntity>> CASING = ENTITY_TYPES.register("casing",
+            () -> EntityType.Builder.<CasingEntity>of(CasingEntity::new, MobCategory.MISC)
+                    .noSave()
+                    .noSummon()
+                    .sized(0.10F, 0.06F)
+                    .clientTrackingRange(64)
+                    .updateInterval(1)
+                    .setShouldReceiveVelocityUpdates(true)
+                    .build(MagazineAndCasing.MOD_ID + ":casing"));
 }

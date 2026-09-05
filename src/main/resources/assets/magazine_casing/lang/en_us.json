@@ -6,5 +6,11 @@
   "config.magazine_casing.magazineDropBlacklist": "Magazine Drop Blacklist",
   "config.magazine_casing.magazineDropBlacklist.description": "Gun IDs that must never drop a magazine on empty reload.",
   "config.magazine_casing.magazineModelReplacements": "Magazine Model Replacements",
-  "config.magazine_casing.magazineModelReplacements.description": "Each entry maps an original gun to a model source gun using \"originalGun|modelSourceGun\"."
+  "config.magazine_casing.magazineModelReplacements.description": "Each entry maps an original gun to a model source gun using \"originalGun|modelSourceGun\".",
+  "config.magazine_casing.casingDespawnTicks": "Casing Despawn Ticks",
+  "config.magazine_casing.casingDespawnTicks.description": "How many ticks a dropped shell casing stays in the world before despawning (20 ticks = 1 second).",
+  "config.magazine_casing.maxCasingCount": "Max Casing Count",
+  "config.magazine_casing.maxCasingCount.description": "Maximum number of shell casing entities that can exist at once.",
+  "config.magazine_casing.enableCasingDrop": "Enable Casing Drop",
+  "config.magazine_casing.enableCasingDrop.description": "Master switch: whether firing ejects a shell casing entity."
 }

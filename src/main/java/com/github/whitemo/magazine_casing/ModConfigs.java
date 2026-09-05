@@ -38,6 +38,12 @@ public class ModConfigs {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> magazineModelReplacements;
         /** Debug */
         public final ForgeConfigSpec.BooleanValue debug;
+        /** 弹壳掉落总开关。 */
+        public final ForgeConfigSpec.BooleanValue enableCasingDrop;
+        /** 弹壳存活 tick 数。 */
+        public final ForgeConfigSpec.IntValue casingDespawnTicks;
+        /** 弹壳最大同时存在数量。 */
+        public final ForgeConfigSpec.IntValue maxCasingCount;
 
         public ServerConfig(ForgeConfigSpec.Builder builder) {
             builder.push("magazine");
@@ -81,8 +87,28 @@ public class ModConfigs {
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
-                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57"),
+                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|tacz:ai_awp"),
                             ServerConfig::isModelReplacementEntry);
+            builder.pop();
+
+            builder.push("casing");
+            enableCasingDrop = builder
+                    .comment("Master switch: whether firing ejects a shell casing entity.",
+                            "弹壳掉落总开关：是否在开火时掉落弹壳实体。")
+                    .translation("config.magazine_casing.enableCasingDrop")
+                    .define("enableCasingDrop", true);
+
+            casingDespawnTicks = builder
+                    .comment("How many ticks a dropped shell casing stays in the world before despawning (20 ticks = 1 second).",
+                            "掉落弹壳在消失前会停留的时间（tick，20 tick = 1 秒）")
+                    .translation("config.magazine_casing.casingDespawnTicks")
+                    .defineInRange("casingDespawnTicks", 200, 1, Integer.MAX_VALUE);
+
+            maxCasingCount = builder
+                    .comment("Maximum number of shell casing entities that can exist at once.",
+                            "弹壳实体最大同时存在数量。")
+                    .translation("config.magazine_casing.maxCasingCount")
+                    .defineInRange("maxCasingCount", 30, 1, Integer.MAX_VALUE);
             builder.pop();
 
             builder.push("debug");
