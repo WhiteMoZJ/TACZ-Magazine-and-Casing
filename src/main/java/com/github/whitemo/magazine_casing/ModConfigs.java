@@ -91,7 +91,8 @@ public class ModConfigs {
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
-                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr", "tacz:ai_awp|classicr:msr"),
+                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr", "tacz:ai_awp|classicr:msr",
+                                    "ccrp:v308|tacz:scar_h", "kpp:nemesis|classicr:msr"),
                             ServerConfig::isModelReplacementEntry);
             builder.pop();
 
@@ -120,7 +121,8 @@ public class ModConfigs {
                     .translation("config.magazine_casing.casingDropBlacklist")
                     .defineListAllowEmpty("casingDropBlacklist", List.of("tacz:lonetrail", "classicr:colt_python", "ccrp:requiem",
                                     "tacz:taurus500", "tacz:rhino357", "tacz:taurus943", "hare:switchgun", "tacz:db_short", "tacz:db_long",
-                                    "hare:m1216", "tacz:springfield1873", "ccrp:mp9_thunder", "ccrp:camg_dexterous"),
+                                    "hare:m1216", "tacz:springfield1873", "ccrp:mp9_thunder", "ccrp:camg_dexterous", "classicr:mgl_40mm",
+                                    "ccrp:lmt_m203", "tacz:m320", "hare:terminator"),
                             value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
 
             reloadCasingDrops = builder
@@ -128,9 +130,9 @@ public class ModConfigs {
                             "换弹时掉落弹壳的枪械，格式 \"gunId|弹壳数量\"。")
                     .translation("config.magazine_casing.reloadCasingDrops")
                     .defineListAllowEmpty("reloadCasingDrops", List.of("tacz:lonetrail|1", "tacz:db_short|2", "tacz:db_long|2",
-                                    "tacz:springfield1873|1", "kpp:870mcs|1", "kpp:870magpul_1|1", "kpp:870magpul|1", "kpp:870_t|1",
+                                    "tacz:springfield1873|1", "kpp:870mcs|1", "kpp:870magpul_1|1", "kpp:870magpul|1", "kpp:m870_t|1",
                                     "kpp:870ll|1", "ccrp:lastwar|1", "tacz:m870|1", "tacz:spas_12|1", "hare:terminator|1", "hare:aek965|1",
-                                    "ccrp:m1887_long"),
+                                    "ccrp:m1887_long|1", "ccrp:lmt_m203|1", "tacz:m320|1"),
                             ServerConfig::isReloadCasingEntry);
             builder.pop();
 
