@@ -40,7 +40,7 @@ public class ModConfigs {
         public final ForgeConfigSpec.BooleanValue debug;
 
         public ServerConfig(ForgeConfigSpec.Builder builder) {
-            builder.push("magazine_casing");
+            builder.push("magazine");
 
             enableMagazineDrop = builder
                     .comment("If true, reloading a magazine-fed gun from empty spawns a dropped magazine entity.",
@@ -83,11 +83,12 @@ public class ModConfigs {
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
                                     "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57"),
                             ServerConfig::isModelReplacementEntry);
+            builder.pop();
 
+            builder.push("debug");
             debug = builder
                     .comment("Debug")
                     .define("debug", false);
-
             builder.pop();
         }
 

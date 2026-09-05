@@ -111,7 +111,7 @@ public class ReloadEventHandler {
             modelDisplayId = null; // use the replacement gun's default magazine model
         }
         PENDING_DROPS.put(shooter.getUUID(),
-                new PendingDrop(level, shooter.getUUID(), modelGunId, modelDisplayId, magazineLevel, gun.copy()));
+                new PendingDrop(level, shooter.getUUID(), gunId, modelGunId, modelDisplayId, magazineLevel, gun.copy()));
     }
 
     private static ResourceLocation findModelReplacement(ResourceLocation gunId) {
@@ -155,16 +155,19 @@ public class ReloadEventHandler {
                 continue;
             }
             iterator.remove();
-            spawnMagazine(pending.level, shooter, pending.gunId, pending.displayId, pending.magazineLevel);
+            spawnMagazine(pending.level, shooter, pending.originalGunId, pending.gunId, pending.displayId, pending.magazineLevel);
         }
     }
 
     private static void spawnMagazine(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
-                                      ResourceLocation displayId, int magazineLevel) {
+                                      ResourceLocation modelGunId, ResourceLocation displayId, int magazineLevel) {
+        if (ModConfigs.SERVER.debug.get()) {
+            LOGGER.info("Spawning dropped magazine: gun={} modelGun={} extendedLevel={}", gunId, modelGunId, magazineLevel);
+        }
         Vec3 pos = shooter.getEyePosition().add(0.0D, -0.4D, 0.0D);
         MagazineEntity magazine = new MagazineEntity(ModEntities.MAGAZINE.get(), level);
         magazine.setPos(pos.x, pos.y, pos.z);
-        magazine.setGunId(gunId);
+        magazine.setGunId(modelGunId);
         magazine.setDisplayId(displayId);
         magazine.setMagazineLevel(magazineLevel);
         magazine.setDeltaMovement(
@@ -200,16 +203,18 @@ public class ReloadEventHandler {
     private static final class PendingDrop {
         final ServerLevel level;
         final UUID shooterId;
+        final ResourceLocation originalGunId;
         final ResourceLocation gunId;
         final ResourceLocation displayId;
         final int magazineLevel;
         final ItemStack gunSnapshot;
         int ticksLeft;
 
-        PendingDrop(ServerLevel level, UUID shooterId, ResourceLocation gunId, ResourceLocation displayId,
-                    int magazineLevel, ItemStack gunSnapshot) {
+        PendingDrop(ServerLevel level, UUID shooterId, ResourceLocation originalGunId, ResourceLocation gunId,
+                    ResourceLocation displayId, int magazineLevel, ItemStack gunSnapshot) {
             this.level = level;
             this.shooterId = shooterId;
+            this.originalGunId = originalGunId;
             this.gunId = gunId;
             this.displayId = displayId;
             this.magazineLevel = magazineLevel;
