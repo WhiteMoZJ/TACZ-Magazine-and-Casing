@@ -23,6 +23,8 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -39,6 +41,7 @@ public class ReloadEventHandler {
 
     private static final int DROP_DELAY_TICKS = 10;
     private static final Map<UUID, PendingDrop> PENDING_DROPS = new HashMap<>();
+    private static final Logger LOGGER = LogManager.getLogger(MagazineAndCasing.MOD_ID);
 
     @SubscribeEvent
     public static void onGunReload(GunReloadEvent event) {
@@ -97,8 +100,34 @@ public class ReloadEventHandler {
         }
 
         int magazineLevel = getExtendedMagLevel(gun, iGun);
+        ResourceLocation modelGunId = gunId;
+        ResourceLocation modelDisplayId = displayId;
+        ResourceLocation replacement = findModelReplacement(gunId);
+        if (replacement != null) {
+            if (ModConfigs.SERVER.debug.get()) {
+                LOGGER.debug("Empty-magazine reload: gun={} modelReplacement={}", gunId, replacement);
+            }
+            modelGunId = replacement;
+            modelDisplayId = null; // use the replacement gun's default magazine model
+        }
         PENDING_DROPS.put(shooter.getUUID(),
-                new PendingDrop(level, shooter.getUUID(), gunId, displayId, magazineLevel, gun.copy()));
+                new PendingDrop(level, shooter.getUUID(), modelGunId, modelDisplayId, magazineLevel, gun.copy()));
+    }
+
+    private static ResourceLocation findModelReplacement(ResourceLocation gunId) {
+        String target = gunId.toString();
+        for (String entry : ModConfigs.SERVER.magazineModelReplacements.get()) {
+            int sep = entry.indexOf('|');
+            if (sep <= 0) {
+                continue;
+            }
+            String left = entry.substring(0, sep).trim();
+            String right = entry.substring(sep + 1).trim();
+            if (left.equals(target)) {
+                return ResourceLocation.tryParse(right);
+            }
+        }
+        return null;
     }
 
     @SubscribeEvent

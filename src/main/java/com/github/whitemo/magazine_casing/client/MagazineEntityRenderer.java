@@ -12,6 +12,7 @@ import com.tacz.guns.client.model.bedrock.BedrockCubeBox;
 import com.tacz.guns.client.model.bedrock.BedrockCubePerFace;
 import com.tacz.guns.client.model.bedrock.BedrockPart;
 import com.tacz.guns.client.resource.GunDisplayInstance;
+import com.tacz.guns.client.resource.index.ClientGunIndex;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -56,16 +57,24 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         return TextureAtlas.LOCATION_BLOCKS;
     }
 
+    private static Optional<GunDisplayInstance> resolveDisplay(ResourceLocation gunId, ResourceLocation displayId) {
+        if (displayId == null) {
+            // Model replacement (or missing display): use the gun's default display.
+            return TimelessAPI.getClientGunIndex(gunId).map(ClientGunIndex::getDefaultDisplay);
+        }
+        return TimelessAPI.getGunDisplay(displayId, gunId);
+    }
+
     @Override
     public void render(MagazineEntity entity, float yaw, float partialTicks, PoseStack poseStack,
                        MultiBufferSource buffer, int light) {
         ResourceLocation gunId = entity.getGunId();
-        ResourceLocation displayId = entity.getDisplayId();
-        if (gunId == null || displayId == null) {
+        if (gunId == null) {
             return;
         }
+        ResourceLocation displayId = entity.getDisplayId();
 
-        Optional<GunDisplayInstance> displayOpt = TimelessAPI.getGunDisplay(displayId, gunId);
+        Optional<GunDisplayInstance> displayOpt = resolveDisplay(gunId, displayId);
         if (displayOpt.isEmpty()) {
             return;
         }

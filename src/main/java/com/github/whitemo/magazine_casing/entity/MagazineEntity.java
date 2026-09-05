@@ -41,7 +41,6 @@ public class MagazineEntity extends Entity implements IEntityAdditionalSpawnData
     private static final double BOUNCE_Y = 0.46D;
     private static final double AIR_DRAG = 0.985D;
     private static final double GROUND_FRICTION = 0.78D;
-    /** 每次弹跳在反弹后额外扣除的固定速度（blocks/tick）。 */
     private static final double BOUNCE_LOSS = 0.04D;
 
     private float spinX;

@@ -34,6 +34,10 @@ public class ModConfigs {
         public final ForgeConfigSpec.IntValue magazineDespawnTicks;
         /** Gun IDs that must never drop a magazine on empty reload. */
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> magazineDropBlacklist;
+        /** Magazine model replacement map, entries of form "originalGun|modelSourceGun". */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> magazineModelReplacements;
+        /** Debug */
+        public final ForgeConfigSpec.BooleanValue debug;
 
         public ServerConfig(ForgeConfigSpec.Builder builder) {
             builder.push("magazine_casing");
@@ -68,7 +72,35 @@ public class ModConfigs {
                             "tacz:m320", "hare:m18rr", "rcp:rpg26", "rcp:at4", "jak:airstrike"),
                             value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
 
+            magazineModelReplacements = builder
+                    .comment("Magazine model replacement map. Each entry is \"originalGun|modelSourceGun\".",
+                            "The original gun's ejected magazine uses the model source gun's magazine model.",
+                            "Example: \"tacz:p90|ccrp:ar57\" makes tacz:p90 drop ccrp:ar57's magazine model.",
+                            "弹匣模型替换映射，每项格式为 \"原枪ID|模型来源枪ID\"。",
+                            "原枪掉落的弹匣会使用模型来源枪的弹匣模型。",
+                            "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
+                    .translation("config.magazine_casing.magazineModelReplacements")
+                    .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
+                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57"),
+                            ServerConfig::isModelReplacementEntry);
+
+            debug = builder
+                    .comment("Debug")
+                    .define("debug", false);
+
             builder.pop();
+        }
+
+        private static boolean isModelReplacementEntry(Object value) {
+            if (!(value instanceof String s)) {
+                return false;
+            }
+            int sep = s.indexOf('|');
+            if (sep <= 0 || sep == s.length() - 1) {
+                return false;
+            }
+            return ResourceLocation.tryParse(s.substring(0, sep).trim()) != null
+                    && ResourceLocation.tryParse(s.substring(sep + 1).trim()) != null;
         }
     }
 }
