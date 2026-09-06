@@ -25,7 +25,7 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
 
     public CasingEntityRenderer(EntityRendererProvider.Context context) {
         super(context);
-        this.shadowRadius = 0.05F;
+        this.shadowRadius = 0.0F;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
 
         // 物理翻滚（yaw/pitch/roll）。
         poseStack.mulPose(Axis.YP.rotationDegrees(Mth.lerp(partialTicks, casing.yRotO, casing.getYRot())));
-        poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(partialTicks, casing.xRotO, casing.getXRot())));
+//        poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(partialTicks, casing.xRotO, casing.getXRot())));
         poseStack.mulPose(Axis.ZP.rotationDegrees(casing.getRenderRoll(partialTicks)));
 
         TimelessAPI.getClientAmmoIndex(ammoId).ifPresent(ammoIndex -> {

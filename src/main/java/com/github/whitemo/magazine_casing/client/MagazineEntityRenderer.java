@@ -48,7 +48,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     public MagazineEntityRenderer(EntityRendererProvider.Context context) {
         super(context);
-        this.shadowRadius = 0.15F;
+        this.shadowRadius = 0.0F;
     }
 
     @Override

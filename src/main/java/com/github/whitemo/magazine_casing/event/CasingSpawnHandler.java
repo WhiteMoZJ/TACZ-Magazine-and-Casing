@@ -28,12 +28,29 @@ import java.util.UUID;
 /**
  * 监听 TACZ 开火事件，生成弹壳实体（相对玩家向右弹出）。只在服务端运行。
  * 手动上膛（manual_action）枪械开火不掉壳，重新上膛时才掉壳。
+ * 弹壳生成位置按枪械类型（type）做服务端近似：服务端拿不到客户端模型里
+ * shell 骨骼与第一人称定位组，只能用枪类型 + 玩家朝向拼出近似抛壳口位置。
  */
 @Mod.EventBusSubscriber(modid = MagazineAndCasing.MOD_ID)
 public class CasingSpawnHandler {
 
-    /** 手动上膛枪械开火后待拉栓的弹壳：shooter UUID -> 弹药 ID。 */
+    /** 手动上膛枪械开火后待拉栓的弹壳：shooter UUID -> 枪械 ID。 */
     private static final Map<UUID, ResourceLocation> PENDING_MANUAL = new HashMap<>();
+
+    /** 枪类型 -> 抛壳口近似偏移（相对玩家脚部：高度 / 右 / 前）。 */
+    private record CasingOffset(double height, double right, double forward) {
+    }
+
+    private static final Map<String, CasingOffset> OFFSET_BY_TYPE = Map.of(
+            "pistol", new CasingOffset(0.90D, 0.25D, 0.25D),
+            "smg", new CasingOffset(1.00D, 0.25D, 0.30D),
+            "rifle", new CasingOffset(1.10D, 0.30D, 0.35D),
+            "sniper", new CasingOffset(1.10D, 0.30D, 0.38D),
+            "shotgun", new CasingOffset(1.05D, 0.28D, 0.32D),
+            "mg", new CasingOffset(1.00D, 0.30D, 0.35D),
+            "rpg", new CasingOffset(1.30D, 0.35D, 0.30D)
+    );
+    private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
 
     @SubscribeEvent
     public static void onGunFire(GunFireEvent event) {
@@ -70,15 +87,14 @@ public class CasingSpawnHandler {
         if (gunData == null || gunData.getAmmoId() == null) {
             return;
         }
-        ResourceLocation ammoId = gunData.getAmmoId();
 
         if (gunData.getBolt() == Bolt.MANUAL_ACTION) {
             // 手动上膛：开火不掉壳，等重新上膛再掉。
-            PENDING_MANUAL.put(shooter.getUUID(), ammoId);
+            PENDING_MANUAL.put(shooter.getUUID(), gunId);
             return;
         }
 
-        spawnCasing(level, shooter, ammoId);
+        spawnCasing(level, shooter, gunId);
     }
 
     /**
@@ -94,23 +110,23 @@ public class CasingSpawnHandler {
         if (!data.isBolting) {
             return; // 拉栓未真正开始
         }
-        ResourceLocation ammoId = PENDING_MANUAL.remove(shooter.getUUID());
-        if (ammoId == null) {
+        ResourceLocation gunId = PENDING_MANUAL.remove(shooter.getUUID());
+        if (gunId == null) {
             return; // 没有已击发的弹壳
         }
-        spawnCasing(level, shooter, ammoId);
+        spawnCasing(level, shooter, gunId);
     }
 
     /**
      * 掉落 count 个弹壳（用于换弹掉壳等场景）。
      */
-    public static void dropCasings(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId, int count) {
+    public static void dropCasings(ServerLevel level, LivingEntity shooter, ResourceLocation gunId, int count) {
         for (int i = 0; i < count; i++) {
-            spawnCasing(level, shooter, ammoId);
+            spawnCasing(level, shooter, gunId);
         }
     }
 
-    private static void spawnCasing(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId) {
+    private static void spawnCasing(ServerLevel level, LivingEntity shooter, ResourceLocation gunId) {
         Vec3 eye = shooter.getEyePosition();
 
         // 限制弹壳最大数量：超出时移除最早的一个。
@@ -129,13 +145,24 @@ public class CasingSpawnHandler {
             }
         }
 
-        // 第三人称手部/枪械位置近似（服务端拿不到客户端模型，只能用偏移近似）。
+        ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getGunData().getAmmoId())
+                .orElse(null);
+        if (ammoId == null) {
+            return;
+        }
+        String gunType = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getPojo().getType())
+                .orElse("");
+
+        // 服务端近似抛壳口位置：枪类型偏移 + 玩家朝向（服务端拿不到第一人称模型骨骼）。
         Vec3 look = shooter.getLookAngle();
         Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
+        CasingOffset offset = OFFSET_BY_TYPE.getOrDefault(gunType, DEFAULT_OFFSET);
         Vec3 pos = shooter.position()
-                .add(0.0D, 1.05D, 0.0D)
-                .add(right.scale(0.28D))
-                .add(look.scale(0.32D));
+                .add(0.0D, offset.height(), 0.0D)
+                .add(right.scale(offset.right()))
+                .add(look.scale(offset.forward()));
 
         CasingEntity casing = new CasingEntity(ModEntities.CASING.get(), level);
         casing.setPos(pos.x, pos.y, pos.z);

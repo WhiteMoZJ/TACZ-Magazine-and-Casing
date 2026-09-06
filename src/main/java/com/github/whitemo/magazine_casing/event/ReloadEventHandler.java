@@ -75,12 +75,7 @@ public class ReloadEventHandler {
         if (ModConfigs.SERVER.enableCasingDrop.get()) {
             int reloadCasingCount = getReloadCasingCount(gunId);
             if (reloadCasingCount > 0 && iGun.getCurrentAmmoCount(gun) == 0) {
-                ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
-                        .map(index -> index.getGunData().getAmmoId())
-                        .orElse(null);
-                if (ammoId != null) {
-                    CasingSpawnHandler.dropCasings(level, shooter, ammoId, reloadCasingCount);
-                }
+                CasingSpawnHandler.dropCasings(level, shooter, gunId, reloadCasingCount);
                 return; // 换弹掉壳，不再走弹匣掉落
             }
         }
