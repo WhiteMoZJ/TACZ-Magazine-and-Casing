@@ -1,43 +1,27 @@
 package com.github.whitemo.magazine_casing.event;
 
-import com.github.whitemo.magazine_casing.MagazineAndCasing;
 import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.entity.CasingEntity;
 import com.github.whitemo.magazine_casing.entity.ModEntities;
 import com.tacz.guns.api.TimelessAPI;
-import com.tacz.guns.api.event.common.GunFireEvent;
-import com.tacz.guns.api.item.IGun;
-import com.tacz.guns.entity.shooter.ShooterDataHolder;
-import com.tacz.guns.resource.pojo.data.gun.Bolt;
-import com.tacz.guns.resource.pojo.data.gun.GunData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.common.Mod;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
- * 监听 TACZ 开火事件，生成弹壳实体（相对玩家向右弹出）。只在服务端运行。
- * 手动上膛（manual_action）枪械开火不掉壳，重新上膛时才掉壳。
- * 弹壳生成位置按枪械类型（type）做服务端近似：服务端拿不到客户端模型里
- * shell 骨骼与第一人称定位组，只能用枪类型 + 玩家朝向拼出近似抛壳口位置。
+ * 生成弹壳实体。精确位置由客户端渲染时计算并通过网络包发给服务端
+ * （见 {@code spawnCasingFromClient}）；换弹掉壳等服务端场景则用枪类型做近似
+ * （见 {@code dropCasings}）。
  */
-@Mod.EventBusSubscriber(modid = MagazineAndCasing.MOD_ID)
 public class CasingSpawnHandler {
 
-    /** 手动上膛枪械开火后待拉栓的弹壳：shooter UUID -> 枪械 ID。 */
-    private static final Map<UUID, ResourceLocation> PENDING_MANUAL = new HashMap<>();
-
-    /** 枪类型 -> 抛壳口近似偏移（相对玩家脚部：高度 / 右 / 前）。 */
+    /** 枪类型 -> 抛壳口近似偏移（相对玩家脚部：高度 / 右 / 前），仅用于服务端触发的掉壳。 */
     private record CasingOffset(double height, double right, double forward) {
     }
 
@@ -52,87 +36,66 @@ public class CasingSpawnHandler {
     );
     private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
 
-    @SubscribeEvent
-    public static void onGunFire(GunFireEvent event) {
-        if (!ModConfigs.SERVER.enableCasingDrop.get()) {
-            return;
-        }
-        if (event.getLogicalSide() != LogicalSide.SERVER) {
-            return;
-        }
-        LivingEntity shooter = event.getShooter();
-        if (!(shooter.level() instanceof ServerLevel level)) {
-            return;
-        }
-
-        ItemStack gun = event.getGunItemStack();
-        if (gun.isEmpty()) {
-            return;
-        }
-        IGun iGun = IGun.getIGunOrNull(gun);
-        if (iGun == null) {
-            return;
-        }
-        ResourceLocation gunId = iGun.getGunId(gun);
-        if (gunId == null) {
-            return;
-        }
-        if (ModConfigs.SERVER.casingDropBlacklist.get().contains(gunId.toString())) {
-            return; // 射击时弹壳掉落黑名单
-        }
-
-        GunData gunData = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getGunData())
-                .orElse(null);
-        if (gunData == null || gunData.getAmmoId() == null) {
-            return;
-        }
-
-        if (gunData.getBolt() == Bolt.MANUAL_ACTION) {
-            // 手动上膛：开火不掉壳，等重新上膛再掉。
-            PENDING_MANUAL.put(shooter.getUUID(), gunId);
-            return;
-        }
-
-        spawnCasing(level, shooter, gunId);
-    }
+    /** 客户端算出的精确位置向玩家后方（-视线方向）的修正量，用于把弹壳生成点挪到抛壳口偏后。 */
+    private static final double BACKWARD_OFFSET = 0.2D;
 
     /**
-     * 由 mixin 在拉栓成功开始时调用，用于掉落手动上膛枪械的弹壳。
+     * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标）。
      */
-    public static void onBolt(LivingEntity shooter, ShooterDataHolder data) {
+    public static void spawnCasingFromClient(ServerPlayer player, ResourceLocation gunId, Vec3 worldPos) {
         if (!ModConfigs.SERVER.enableCasingDrop.get()) {
             return;
         }
-        if (!(shooter.level() instanceof ServerLevel level)) {
+        if (gunId == null || ModConfigs.SERVER.casingDropBlacklist.get().contains(gunId.toString())) {
             return;
         }
-        if (!data.isBolting) {
-            return; // 拉栓未真正开始
+        if (!(player.level() instanceof ServerLevel level)) {
+            return;
         }
-        ResourceLocation gunId = PENDING_MANUAL.remove(shooter.getUUID());
-        if (gunId == null) {
-            return; // 没有已击发的弹壳
+        ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getGunData().getAmmoId())
+                .orElse(null);
+        if (ammoId == null) {
+            return;
         }
-        spawnCasing(level, shooter, gunId);
+        Vec3 adjusted = worldPos.subtract(player.getLookAngle().scale(BACKWARD_OFFSET));
+        spawnCasingAt(level, player, ammoId, adjusted);
     }
 
     /**
-     * 掉落 count 个弹壳（用于换弹掉壳等场景）。
+     * 掉落 count 个弹壳（用于换弹掉壳等服务端触发场景，位置用枪类型近似）。
      */
     public static void dropCasings(ServerLevel level, LivingEntity shooter, ResourceLocation gunId, int count) {
+        ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getGunData().getAmmoId())
+                .orElse(null);
+        if (ammoId == null) {
+            return;
+        }
+        String gunType = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getPojo().getType())
+                .orElse("");
+        Vec3 look = shooter.getLookAngle();
+        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
+        CasingOffset offset = OFFSET_BY_TYPE.getOrDefault(gunType, DEFAULT_OFFSET);
+        Vec3 pos = shooter.position()
+                .add(0.0D, offset.height(), 0.0D)
+                .add(right.scale(offset.right()))
+                .add(look.scale(offset.forward()));
+
         for (int i = 0; i < count; i++) {
-            spawnCasing(level, shooter, gunId);
+            spawnCasingAt(level, shooter, ammoId, pos);
         }
     }
 
-    private static void spawnCasing(ServerLevel level, LivingEntity shooter, ResourceLocation gunId) {
-        Vec3 eye = shooter.getEyePosition();
-
+    /**
+     * 在指定世界位置生成一个弹壳实体，并施加「向右 + 向上」的初速度。
+     */
+    private static void spawnCasingAt(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId, Vec3 pos) {
         // 限制弹壳最大数量：超出时移除最早的一个。
         int max = ModConfigs.SERVER.maxCasingCount.get();
         List<CasingEntity> existing = level.getEntitiesOfClass(CasingEntity.class,
-                new AABB(eye.x, eye.y, eye.z, eye.x, eye.y, eye.z).inflate(256.0D));
+                new AABB(pos.x, pos.y, pos.z, pos.x, pos.y, pos.z).inflate(256.0D));
         if (existing.size() >= max) {
             CasingEntity oldest = null;
             for (CasingEntity casing : existing) {
@@ -145,31 +108,14 @@ public class CasingSpawnHandler {
             }
         }
 
-        ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getGunData().getAmmoId())
-                .orElse(null);
-        if (ammoId == null) {
-            return;
-        }
-        String gunType = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getPojo().getType())
-                .orElse("");
-
-        // 服务端近似抛壳口位置：枪类型偏移 + 玩家朝向（服务端拿不到第一人称模型骨骼）。
-        Vec3 look = shooter.getLookAngle();
-        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
-        CasingOffset offset = OFFSET_BY_TYPE.getOrDefault(gunType, DEFAULT_OFFSET);
-        Vec3 pos = shooter.position()
-                .add(0.0D, offset.height(), 0.0D)
-                .add(right.scale(offset.right()))
-                .add(look.scale(offset.forward()));
-
         CasingEntity casing = new CasingEntity(ModEntities.CASING.get(), level);
         casing.setPos(pos.x, pos.y, pos.z);
         casing.setAmmoId(ammoId);
 
         // 初速度对标原版 shell 的 initial_velocity [5,2,1]（块/秒）≈ [0.25,0.10,0.05]（块/tick），
-        // 方向为「玩家右侧 + 向上 + 前方」，并加随机扰动。方向符号可翻转 right 来左右对调。
+        // 方向为「玩家右侧 + 向上 + 前方」，并加随机扰动。
+        Vec3 look = shooter.getLookAngle();
+        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
         double rightSpeed = 0.25D + (level.random.nextDouble() - 0.5D) * 0.10D;
         double upSpeed = 0.10D + (level.random.nextDouble() - 0.5D) * 0.10D;
         double forwardSpeed = 0.05D + (level.random.nextDouble() - 0.5D) * 0.05D;
