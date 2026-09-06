@@ -48,6 +48,10 @@ public class ModConfigs {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> casingDropBlacklist;
         /** 换弹时掉落弹壳（gunid|count）。 */
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> reloadCasingDrops;
+        /** 反向抛壳的武器列表（弹壳横向初速度取反）。 */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> reverseEjectGuns;
+        /** 无横向初速抛壳的武器列表（弹壳没有横向初速度）。 */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> noLateralEjectGuns;
 
         public CommonConfig(ForgeConfigSpec.Builder builder) {
             builder.push("magazine");
@@ -86,8 +90,8 @@ public class ModConfigs {
                     .comment("Magazine model replacement map. Each entry is \"originalGun|modelSourceGun\".",
                             "The original gun's ejected magazine uses the model source gun's magazine model.",
                             "Example: \"tacz:p90|ccrp:ar57\" makes tacz:p90 drop ccrp:ar57's magazine model.",
-                            "弹匣模型替换映射，每项格式为 \"原枪ID|模型来源枪ID\"。",
-                            "原枪掉落的弹匣会使用模型来源枪的弹匣模型。",
+                            "弹匣模型替换映射，每项格式为 \"原枪ID|模型来源枪ID\"",
+                            "原枪掉落的弹匣会使用模型来源枪的弹匣模型",
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
@@ -99,7 +103,7 @@ public class ModConfigs {
             builder.push("casing");
             enableCasingDrop = builder
                     .comment("Master switch: whether firing ejects a shell casing entity.",
-                            "弹壳掉落总开关：是否在开火时掉落弹壳实体。")
+                            "弹壳掉落总开关：是否在开火时掉落弹壳实体")
                     .translation("config.magazine_casing.enableCasingDrop")
                     .define("enableCasingDrop", true);
 
@@ -111,13 +115,13 @@ public class ModConfigs {
 
             maxCasingCount = builder
                     .comment("Maximum number of shell casing entities that can exist at once.",
-                            "弹壳实体最大同时存在数量。")
+                            "弹壳实体最大同时存在数量")
                     .translation("config.magazine_casing.maxCasingCount")
                     .defineInRange("maxCasingCount", 30, 1, Integer.MAX_VALUE);
 
             casingDropBlacklist = builder
-                    .comment("Gun IDs that must not eject a shell casing when firing.",
-                            "射击时不掉落弹壳的枪械 ID 列表（与换弹掉壳设置互不影响）。")
+                    .comment("Gun IDs that must not eject a shell casing when firing. (Do not affect guns that eject shell casings on reload)",
+                            "射击时不掉落弹壳的枪械 ID 列表（与换弹掉壳设置互不影响）")
                     .translation("config.magazine_casing.casingDropBlacklist")
                     .defineListAllowEmpty("casingDropBlacklist", List.of("tacz:lonetrail", "classicr:colt_python", "ccrp:requiem",
                                     "tacz:taurus500", "tacz:rhino357", "tacz:taurus943", "hare:switchgun", "tacz:db_short", "tacz:db_long",
@@ -134,6 +138,21 @@ public class ModConfigs {
                                     "kpp:870ll|1", "ccrp:lastwar|1", "tacz:m870|1", "tacz:spas_12|1", "hare:terminator|1", "hare:aek965|1",
                                     "ccrp:m1887_long|1", "ccrp:lmt_m203|1", "tacz:m320|1"),
                             CommonConfig::isReloadCasingEntry);
+
+            reverseEjectGuns = builder
+                    .comment("Guns that eject the shell casing to the opposite side.",
+                            "反向抛壳的武器")
+                    .translation("config.magazine_casing.reverseEjectGuns")
+                    .defineListAllowEmpty("reverseEjectGuns", List.of("rfp:rpl20", "rfp:6p41bp", "rfp:mg43"),
+                            value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
+
+            noLateralEjectGuns = builder
+                    .comment("Guns that eject the shell casing with no lateral initial velocity (e.g. bottom ejection).",
+                            "无横向初速抛壳的武器（弹壳没有横向初速度，如底部抛壳）")
+                    .translation("config.magazine_casing.noLateralEjectGuns")
+                    .defineListAllowEmpty("noLateralEjectGuns",
+                            List.of("tacz:p90", "ccrp:p90_effen_90", "ccrp:p90_paw", "ccrp:p90_shround_s", "ccrp:ar57", "classicr:dp28", "hare:terminator"),
+                            value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
             builder.pop();
 
             builder.push("debug");

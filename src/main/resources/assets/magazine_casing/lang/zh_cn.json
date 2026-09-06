@@ -7,5 +7,7 @@
   "config.magazine_casing.maxCasingCount": "弹壳最大数量",
   "config.magazine_casing.enableCasingDrop": "启用弹壳掉落",
   "config.magazine_casing.casingDropBlacklist": "弹壳掉落黑名单",
-  "config.magazine_casing.reloadCasingDrops": "换弹弹壳掉落"
+  "config.magazine_casing.reloadCasingDrops": "换弹弹壳掉落",
+  "config.magazine_casing.reverseEjectGuns": "反向抛壳武器",
+  "config.magazine_casing.noLateralEjectGuns": "无横向抛壳武器"
 }

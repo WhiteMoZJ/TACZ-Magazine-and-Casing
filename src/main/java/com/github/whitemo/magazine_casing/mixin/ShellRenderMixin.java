@@ -66,7 +66,7 @@ public class ShellRenderMixin {
     /**
      * 当队列里存在刚加入、尚未发送过生成请求的新弹壳时，用当前 PoseStack 提取弹壳世界坐标并发包。
      * 由于 render 被 cancel（原生渲染禁用），弹壳的 pose 永远不会被初始化，
-     * 因此用 {@link #SENT} 记录已发送的弹壳，保证每个弹壳只发送一次。
+     * 因此记录已发送的弹壳，保证每个弹壳只发送一次。
      */
     @Unique
     private void magazineAndCasing$captureAndSend(PoseStack poseStack) {

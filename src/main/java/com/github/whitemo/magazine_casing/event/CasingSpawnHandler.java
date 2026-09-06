@@ -36,7 +36,20 @@ public class CasingSpawnHandler {
             "mg", new CasingOffset(1.00D, 0.30D, 0.35D),
             "rpg", new CasingOffset(1.30D, 0.35D, 0.30D)
     );
+
     private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
+
+    private static final Map<String, Double> CASING_RIGHT_SPEED = Map.of(
+            "pistol", 0.25D,
+            "smg", 0.25D,
+            "rifle", 0.35D,
+            "sniper", 0.25D,
+            "shotgun", 0.25D,
+            "mg", 0.35D,
+            "rpg", 0.25D
+    );
+
+    private static final Double DEFAULT_RIGHT_SPEED = 0.25D;
 
     /** 客户端算出的精确位置向玩家后方（-视线方向）的修正量，用于把弹壳生成点挪到抛壳口偏后。 */
     private static final double BACKWARD_OFFSET = 0.25D;
@@ -87,7 +100,7 @@ public class CasingSpawnHandler {
             return;
         }
         Vec3 adjusted = worldPos.subtract(player.getLookAngle().scale(BACKWARD_OFFSET));
-        spawnCasingAt(level, player, ammoId, adjusted);
+        spawnCasingAt(level, player, gunId, ammoId, adjusted);
     }
 
     /**
@@ -112,7 +125,7 @@ public class CasingSpawnHandler {
                 .add(look.scale(offset.forward()));
 
         for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, shooter, ammoId, pos);
+            spawnCasingAt(level, shooter, gunId, ammoId, pos);
         }
 
         // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
@@ -122,7 +135,8 @@ public class CasingSpawnHandler {
     /**
      * 在指定世界位置生成一个弹壳实体，并施加「向右 + 向上」的初速度。
      */
-    private static void spawnCasingAt(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId, Vec3 pos) {
+    private static void spawnCasingAt(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
+                                      ResourceLocation ammoId, Vec3 pos) {
         // 限制弹壳最大数量：超出时移除最早的一个。
         int max = ModConfigs.COMMON.maxCasingCount.get();
         List<CasingEntity> existing = level.getEntitiesOfClass(CasingEntity.class,
@@ -148,8 +162,23 @@ public class CasingSpawnHandler {
         Vec3 look = shooter.getLookAngle();
         Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
         Vec3 playerVelocity = shooter.getDeltaMovement();
-        double rightSpeed = 0.25D + (level.random.nextDouble() - 0.5D) * 0.10D;
-        double upSpeed = 0.10D + (level.random.nextDouble() - 0.5D) * 0.10D;
+        String gun = gunId.toString();
+        String gunType = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getPojo().getType())
+                .orElse("");
+
+        boolean noLateral = ModConfigs.COMMON.noLateralEjectGuns.get().contains(gun);
+        boolean reverseEject = ModConfigs.COMMON.reverseEjectGuns.get().contains(gun);
+        double rightSpeed;
+        if (noLateral) {
+            rightSpeed = 0.0D;
+        } else {
+            rightSpeed = CASING_RIGHT_SPEED.getOrDefault(gunType, DEFAULT_RIGHT_SPEED) + (level.random.nextDouble() - 0.5D) * 0.10D;
+            if (reverseEject) {
+                rightSpeed = -rightSpeed;
+            }
+        }
+        double upSpeed = 0.15D + (level.random.nextDouble() - 0.5D) * 0.10D;
         double forwardSpeed = 0.05D + (level.random.nextDouble() - 0.5D) * 0.05D;
         casing.setDeltaMovement(
                 right.x * rightSpeed + look.x * forwardSpeed + playerVelocity.x,

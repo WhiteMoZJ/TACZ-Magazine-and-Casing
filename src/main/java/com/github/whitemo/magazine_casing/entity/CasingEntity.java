@@ -6,6 +6,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 
@@ -117,5 +118,10 @@ public class CasingEntity extends AbstractDroppedEntity {
         if (tag.contains("AmmoId")) {
             this.entityData.set(AMMO_ID, tag.getString("AmmoId"));
         }
+    }
+    @Override
+    public Entity.MovementEmission getMovementEmission() {
+        // 弹壳/弹匣掉落时不播放原版的实体脚步音。
+        return Entity.MovementEmission.NONE;
     }
 }
