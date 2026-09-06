@@ -55,6 +55,10 @@ public class ShellRenderMixin {
     private void magazineCasing$captureShellPositionAndDisable(PoseStack poseStack, VertexConsumer buffer,
                                                                ItemDisplayContext context, int light, int overlay,
                                                                CallbackInfo ci) {
+        // 弹壳生成关闭时不拦截，让 TACZ 原生弹壳渲染正常执行。
+        if (!ModConfigs.COMMON.enableCasingDrop.get()) {
+            return;
+        }
         magazineAndCasing$captureAndSend(poseStack);
         ci.cancel();
     }
