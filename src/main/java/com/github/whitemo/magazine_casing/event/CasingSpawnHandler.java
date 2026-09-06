@@ -93,26 +93,48 @@ public class CasingSpawnHandler {
         }
         LAST_CASING_TICK.put(player.getUUID(), tick);
 
-        ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getGunData().getAmmoId())
-                .orElse(null);
+        ResourceLocation ammoId = resolveAmmoId(gunId);
         if (ammoId == null) {
             return;
         }
+
+        // 弹壳模型替换 + 每次射击抛壳数量
+        ResourceLocation casingAmmoId = ammoId;
+        int count = 1;
+        CasingReplacement replacement = resolveCasingReplacement(gunId);
+        if (replacement != null) {
+            ResourceLocation modelAmmoId = resolveAmmoId(replacement.modelGunId());
+            if (modelAmmoId != null) {
+                casingAmmoId = modelAmmoId;
+            }
+            count = replacement.count();
+        }
+
         Vec3 adjusted = worldPos.subtract(player.getLookAngle().scale(BACKWARD_OFFSET));
-        spawnCasingAt(level, player, gunId, ammoId, adjusted);
+        for (int i = 0; i < count; i++) {
+            spawnCasingAt(level, player, gunId, casingAmmoId, adjusted);
+        }
     }
 
     /**
      * 掉落 count 个弹壳（用于换弹掉壳等服务端触发场景，位置用枪类型近似）。
      */
     public static void dropCasings(ServerLevel level, LivingEntity shooter, ResourceLocation gunId, int count) {
-        ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getGunData().getAmmoId())
-                .orElse(null);
+        ResourceLocation ammoId = resolveAmmoId(gunId);
         if (ammoId == null) {
             return;
         }
+
+        // 换弹掉壳也使用替换后的弹壳模型；数量仍由 reloadCasingDrops 决定。
+        ResourceLocation casingAmmoId = ammoId;
+        CasingReplacement replacement = resolveCasingReplacement(gunId);
+        if (replacement != null) {
+            ResourceLocation modelAmmoId = resolveAmmoId(replacement.modelGunId());
+            if (modelAmmoId != null) {
+                casingAmmoId = modelAmmoId;
+            }
+        }
+
         String gunType = TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getPojo().getType())
                 .orElse("");
@@ -125,7 +147,7 @@ public class CasingSpawnHandler {
                 .add(look.scale(offset.forward()));
 
         for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, shooter, gunId, ammoId, pos);
+            spawnCasingAt(level, shooter, gunId, casingAmmoId, pos);
         }
 
         // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
@@ -186,5 +208,40 @@ public class CasingSpawnHandler {
                 right.z * rightSpeed + look.z * forwardSpeed + playerVelocity.z);
 
         level.addFreshEntity(casing);
+    }
+
+    /** 弹壳模型替换配置解析结果：模型枪 ID + 每次射击抛壳数量。 */
+    private record CasingReplacement(ResourceLocation modelGunId, int count) {
+    }
+
+    private static ResourceLocation resolveAmmoId(ResourceLocation gunId) {
+        return TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getGunData().getAmmoId())
+                .orElse(null);
+    }
+
+    private static CasingReplacement resolveCasingReplacement(ResourceLocation gunId) {
+        String gun = gunId.toString();
+        for (String entry : ModConfigs.COMMON.casingModelReplacements.get()) {
+            String[] parts = entry.split("\\|", -1);
+            if (parts.length != 3) {
+                continue;
+            }
+            if (!parts[0].trim().equals(gun)) {
+                continue;
+            }
+            ResourceLocation modelGunId = ResourceLocation.tryParse(parts[1].trim());
+            if (modelGunId == null) {
+                continue;
+            }
+            try {
+                int count = Integer.parseInt(parts[2].trim());
+                if (count > 0) {
+                    return new CasingReplacement(modelGunId, count);
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
     }
 }

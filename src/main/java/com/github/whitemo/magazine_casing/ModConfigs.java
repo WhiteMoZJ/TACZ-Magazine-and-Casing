@@ -52,6 +52,8 @@ public class ModConfigs {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> reverseEjectGuns;
         /** 无横向初速抛壳的武器列表（弹壳没有横向初速度）。 */
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> noLateralEjectGuns;
+        /** 弹壳模型替换（原枪ID|模型枪ID|每次射击抛壳数量）。 */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> casingModelReplacements;
 
         public CommonConfig(ForgeConfigSpec.Builder builder) {
             builder.push("magazine");
@@ -95,8 +97,9 @@ public class ModConfigs {
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
-                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr", "tacz:ai_awp|classicr:msr",
-                                    "ccrp:v308|tacz:scar_h", "kpp:nemesis|classicr:msr"),
+                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr",
+                                    "tacz:ai_awp|classicr:msr", "ccrp:v308|classicr:scar_mk20", "kpp:nemesis|classicr:msr",
+                                    "classicr:m82a2|tacz:m95"),
                             CommonConfig::isModelReplacementEntry);
             builder.pop();
 
@@ -153,6 +156,15 @@ public class ModConfigs {
                     .defineListAllowEmpty("noLateralEjectGuns",
                             List.of("tacz:p90", "ccrp:p90_effen_90", "ccrp:p90_paw", "ccrp:p90_shround_s", "ccrp:ar57", "classicr:dp28", "hare:terminator"),
                             value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
+
+            casingModelReplacements = builder
+                    .comment("Casing model replacement map. Each entry is \"originalGun|modelGun|shellCount\".",
+                            "The original gun's ejected casing uses the model gun's casing model, and ejects shellCount casings per shot.",
+                            "弹壳模型替换映射，每项格式为 \"原枪ID|模型枪ID|每次射击抛壳数量\"",
+                            "原枪抛出的弹壳会使用模型枪的弹壳模型，且每次射击抛出指定数量的弹壳。")
+                    .translation("config.magazine_casing.casingModelReplacements")
+                    .defineListAllowEmpty("casingModelReplacements", List.of("hare:dp12|tacz:m870|1", "hare:ksg|tacz:m870|1", "ccrp:mk18_mjolnir|tacz:ai_awp|1"),
+                            CommonConfig::isCasingReplacementEntry);
             builder.pop();
 
             builder.push("debug");
@@ -187,6 +199,25 @@ public class ModConfigs {
             }
             try {
                 return Integer.parseInt(s.substring(sep + 1).trim()) > 0;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+
+        private static boolean isCasingReplacementEntry(Object value) {
+            if (!(value instanceof String s)) {
+                return false;
+            }
+            String[] parts = s.split("\\|", -1);
+            if (parts.length != 3) {
+                return false;
+            }
+            if (ResourceLocation.tryParse(parts[0].trim()) == null
+                    || ResourceLocation.tryParse(parts[1].trim()) == null) {
+                return false;
+            }
+            try {
+                return Integer.parseInt(parts[2].trim()) > 0;
             } catch (NumberFormatException e) {
                 return false;
             }

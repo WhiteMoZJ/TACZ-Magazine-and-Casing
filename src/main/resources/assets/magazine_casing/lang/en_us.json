@@ -9,5 +9,6 @@
   "config.magazine_casing.casingDropBlacklist": "Casing Drop Blacklist",
   "config.magazine_casing.reloadCasingDrops": "Reload Casing Drops",
   "config.magazine_casing.reverseEjectGuns": "Reverse Eject Guns",
-  "config.magazine_casing.noLateralEjectGuns": "No Lateral Eject Guns"
+  "config.magazine_casing.noLateralEjectGuns": "No Lateral Eject Guns",
+  "config.magazine_casing.casingModelReplacements": "Casing Model Replacements"
 }
