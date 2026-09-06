@@ -1,5 +1,7 @@
 package com.github.whitemo.magazine_casing.mixin;
 
+import com.github.whitemo.magazine_casing.ModConfigs;
+import com.github.whitemo.magazine_casing.client.CasingSpawnGuard;
 import com.github.whitemo.magazine_casing.network.Networking;
 import com.github.whitemo.magazine_casing.network.SpawnCasingPacket;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -13,8 +15,11 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -22,9 +27,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.Collections;
-import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
@@ -35,8 +37,10 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 @Mixin(value = ShellRender.class, remap = false)
 public class ShellRenderMixin {
 
-    /** 已发送过生成请求的弹壳，避免因 render 被 cancel（pose 永不初始化）而重复发送。 */
-    private static final Set<ShellRender.Data> SENT = Collections.newSetFromMap(new WeakHashMap<>());
+    /** 用于在弹壳对象上标记「已发送」的占位矩阵，避免依赖静态集合（mixin 静态字段在切换人称时会失效）。 */
+    private static final Matrix3f SENT_MARK = new Matrix3f();
+
+    private static final Logger LOGGER = LogManager.getLogger("magazine_casing");
 
     @Shadow
     @Final
@@ -60,9 +64,13 @@ public class ShellRenderMixin {
      * 因此用 {@link #SENT} 记录已发送的弹壳，保证每个弹壳只发送一次。
      */
     private void captureAndSend(PoseStack poseStack) {
+        // 第三人称渲染弹壳时（isSelf=false）不发送，避免切换人称后主模型/LOD 再发一次导致的重复。
+        if (!ShellRender.isSelf) {
+            return;
+        }
         boolean hasNewShell = false;
         for (ShellRender.Data data : SHELL_QUEUE) {
-            if (data.pose == null && data.normal == null && !SENT.contains(data)) {
+            if (data.pose == null && data.normal == null) {
                 hasNewShell = true;
                 break;
             }
@@ -87,9 +95,15 @@ public class ShellRenderMixin {
         }
 
         for (ShellRender.Data data : SHELL_QUEUE) {
-            if (data.pose == null && data.normal == null && !SENT.contains(data)) {
-                SENT.add(data);
-                Networking.CHANNEL.sendToServer(new SpawnCasingPacket(worldPos, gunId));
+            if (data.pose == null && data.normal == null) {
+                data.normal = SENT_MARK;
+                if (CasingSpawnGuard.tryMark(data.timeStamp)) {
+                    if (ModConfigs.SERVER.debug.get()) {
+                        LOGGER.info("[Casing] SEND gun={} ts={} isSelf={} queue={}",
+                                gunId, data.timeStamp, ShellRender.isSelf, SHELL_QUEUE.size());
+                    }
+                    Networking.CHANNEL.sendToServer(new SpawnCasingPacket(worldPos, gunId));
+                }
             }
         }
     }

@@ -49,6 +49,9 @@ public class CasingSpawnHandler {
     /** 换弹掉壳去重窗口（tick）。窗口内同一把枪的客户端退壳包会被忽略。 */
     private static final int RELOAD_CASING_WINDOW_TICKS = 60;
 
+    /** 每个玩家最近一次生成弹壳的 tick，用于在同一 tick 内去掉「主模型 + LOD 低模」各发一次造成的重复。 */
+    private static final Map<UUID, Integer> LAST_CASING_TICK = new HashMap<>();
+
     /**
      * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标）。
      */
@@ -68,6 +71,14 @@ public class CasingSpawnHandler {
         if (mark != null && player.tickCount - mark.tick() <= RELOAD_CASING_WINDOW_TICKS && mark.gunId().equals(gunId)) {
             return;
         }
+
+        // 开火去重：主模型与 LOD 低模在同一渲染帧各发一次包，同一 tick 内只生成第一个。
+        int tick = player.tickCount;
+        Integer lastTick = LAST_CASING_TICK.get(player.getUUID());
+        if (lastTick != null && lastTick == tick) {
+            return;
+        }
+        LAST_CASING_TICK.put(player.getUUID(), tick);
 
         ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getGunData().getAmmoId())
