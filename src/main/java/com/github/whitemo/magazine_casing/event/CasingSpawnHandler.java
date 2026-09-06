@@ -11,8 +11,10 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 生成弹壳实体。精确位置由客户端渲染时计算并通过网络包发给服务端
@@ -37,7 +39,15 @@ public class CasingSpawnHandler {
     private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
 
     /** 客户端算出的精确位置向玩家后方（-视线方向）的修正量，用于把弹壳生成点挪到抛壳口偏后。 */
-    private static final double BACKWARD_OFFSET = 0.2D;
+    private static final double BACKWARD_OFFSET = 0.25D;
+
+    /** 换弹掉壳的去重标记：记录某玩家最近一次服务端掉壳的 tick 与枪械，用于屏蔽客户端换弹退壳的重复包。 */
+    private record ReloadCasingMark(int tick, ResourceLocation gunId) {
+    }
+
+    private static final Map<UUID, ReloadCasingMark> RELOAD_CASING_MARKS = new HashMap<>();
+    /** 换弹掉壳去重窗口（tick）。窗口内同一把枪的客户端退壳包会被忽略。 */
+    private static final int RELOAD_CASING_WINDOW_TICKS = 60;
 
     /**
      * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标）。
@@ -52,6 +62,13 @@ public class CasingSpawnHandler {
         if (!(player.level() instanceof ServerLevel level)) {
             return;
         }
+
+        // 换弹掉壳去重：服务端已通过 dropCasings 掉过这把枪的壳，忽略窗口内客户端的重复退壳包。
+        ReloadCasingMark mark = RELOAD_CASING_MARKS.get(player.getUUID());
+        if (mark != null && player.tickCount - mark.tick() <= RELOAD_CASING_WINDOW_TICKS && mark.gunId().equals(gunId)) {
+            return;
+        }
+
         ResourceLocation ammoId = TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getGunData().getAmmoId())
                 .orElse(null);
@@ -86,6 +103,9 @@ public class CasingSpawnHandler {
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, shooter, ammoId, pos);
         }
+
+        // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
+        RELOAD_CASING_MARKS.put(shooter.getUUID(), new ReloadCasingMark(shooter.tickCount, gunId));
     }
 
     /**
