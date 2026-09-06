@@ -45,7 +45,7 @@ public class ReloadEventHandler {
 
     @SubscribeEvent
     public static void onGunReload(GunReloadEvent event) {
-        if (!ModConfigs.SERVER.enableMagazineDrop.get()) {
+        if (!ModConfigs.COMMON.enableMagazineDrop.get()) {
             return;
         }
         if (event.getLogicalSide() != LogicalSide.SERVER) {
@@ -72,7 +72,7 @@ public class ReloadEventHandler {
         }
 
         // 换弹时掉落弹壳（gunid|count），与弹匣掉落互相独立
-        if (ModConfigs.SERVER.enableCasingDrop.get()) {
+        if (ModConfigs.COMMON.enableCasingDrop.get()) {
             int reloadCasingCount = getReloadCasingCount(gunId);
             if (reloadCasingCount > 0 && iGun.getCurrentAmmoCount(gun) == 0) {
                 CasingSpawnHandler.dropCasings(level, shooter, gunId, reloadCasingCount);
@@ -80,7 +80,7 @@ public class ReloadEventHandler {
             }
         }
 
-        if (ModConfigs.SERVER.magazineDropBlacklist.get().contains(gunId.toString())) {
+        if (ModConfigs.COMMON.magazineDropBlacklist.get().contains(gunId.toString())) {
             // Gun is blacklisted: never drop a magazine for it.
             return;
         }
@@ -114,7 +114,7 @@ public class ReloadEventHandler {
         ResourceLocation modelDisplayId = displayId;
         ResourceLocation replacement = findModelReplacement(gunId);
         if (replacement != null) {
-            if (ModConfigs.SERVER.debug.get()) {
+            if (ModConfigs.COMMON.debug.get()) {
                 LOGGER.debug("Empty-magazine reload: gun={} modelReplacement={}", gunId, replacement);
             }
             modelGunId = replacement;
@@ -126,7 +126,7 @@ public class ReloadEventHandler {
 
     private static ResourceLocation findModelReplacement(ResourceLocation gunId) {
         String target = gunId.toString();
-        for (String entry : ModConfigs.SERVER.magazineModelReplacements.get()) {
+        for (String entry : ModConfigs.COMMON.magazineModelReplacements.get()) {
             int sep = entry.indexOf('|');
             if (sep <= 0) {
                 continue;
@@ -142,7 +142,7 @@ public class ReloadEventHandler {
 
     private static int getReloadCasingCount(ResourceLocation gunId) {
         String target = gunId.toString();
-        for (String entry : ModConfigs.SERVER.reloadCasingDrops.get()) {
+        for (String entry : ModConfigs.COMMON.reloadCasingDrops.get()) {
             int sep = entry.indexOf('|');
             if (sep <= 0) {
                 continue;
@@ -191,7 +191,7 @@ public class ReloadEventHandler {
 
     private static void spawnMagazine(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
                                       ResourceLocation modelGunId, ResourceLocation displayId, int magazineLevel) {
-        if (ModConfigs.SERVER.debug.get()) {
+        if (ModConfigs.COMMON.debug.get()) {
             LOGGER.info("Spawning dropped magazine: gun={} modelGun={} extendedLevel={}", gunId, modelGunId, magazineLevel);
         }
         Vec3 pos = shooter.getEyePosition().add(0.0D, -0.4D, 0.0D);

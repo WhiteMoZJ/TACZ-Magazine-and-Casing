@@ -23,6 +23,7 @@ import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -54,7 +55,7 @@ public class ShellRenderMixin {
     private void magazineCasing$captureShellPositionAndDisable(PoseStack poseStack, VertexConsumer buffer,
                                                                ItemDisplayContext context, int light, int overlay,
                                                                CallbackInfo ci) {
-        captureAndSend(poseStack);
+        magazineAndCasing$captureAndSend(poseStack);
         ci.cancel();
     }
 
@@ -63,7 +64,8 @@ public class ShellRenderMixin {
      * 由于 render 被 cancel（原生渲染禁用），弹壳的 pose 永远不会被初始化，
      * 因此用 {@link #SENT} 记录已发送的弹壳，保证每个弹壳只发送一次。
      */
-    private void captureAndSend(PoseStack poseStack) {
+    @Unique
+    private void magazineAndCasing$captureAndSend(PoseStack poseStack) {
         // 第三人称渲染弹壳时（isSelf=false）不发送，避免切换人称后主模型/LOD 再发一次导致的重复。
         if (!ShellRender.isSelf) {
             return;
@@ -89,7 +91,7 @@ public class ShellRenderMixin {
             return;
         }
 
-        Vec3 worldPos = toWorld(poseStack);
+        Vec3 worldPos = magazineAndCasing$toWorld(poseStack);
         if (worldPos == null) {
             return;
         }
@@ -98,7 +100,7 @@ public class ShellRenderMixin {
             if (data.pose == null && data.normal == null) {
                 data.normal = SENT_MARK;
                 if (CasingSpawnGuard.tryMark(data.timeStamp)) {
-                    if (ModConfigs.SERVER.debug.get()) {
+                    if (ModConfigs.COMMON.debug.get()) {
                         LOGGER.info("[Casing] SEND gun={} ts={} isSelf={} queue={}",
                                 gunId, data.timeStamp, ShellRender.isSelf, SHELL_QUEUE.size());
                     }
@@ -112,7 +114,8 @@ public class ShellRenderMixin {
      * 把 PoseStack 当前（已定位到 shell 节点）的平移换算成世界坐标。
      * 第一人称物品渲染的 PoseStack 处于相机空间：原点在相机，X 右、Y 上、Z 指向相机后方。
      */
-    private Vec3 toWorld(PoseStack poseStack) {
+    @Unique
+    private Vec3 magazineAndCasing$toWorld(PoseStack poseStack) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.gameRenderer == null) {
             return null;

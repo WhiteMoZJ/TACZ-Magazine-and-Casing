@@ -104,7 +104,7 @@ public class CasingEntity extends AbstractDroppedEntity {
 
     @Override
     protected int despawnTicks() {
-        return ModConfigs.SERVER.casingDespawnTicks.get();
+        return ModConfigs.COMMON.casingDespawnTicks.get();
     }
 
     @Override

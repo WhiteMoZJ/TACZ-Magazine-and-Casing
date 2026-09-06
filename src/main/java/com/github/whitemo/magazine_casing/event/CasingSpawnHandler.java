@@ -56,10 +56,10 @@ public class CasingSpawnHandler {
      * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标）。
      */
     public static void spawnCasingFromClient(ServerPlayer player, ResourceLocation gunId, Vec3 worldPos) {
-        if (!ModConfigs.SERVER.enableCasingDrop.get()) {
+        if (!ModConfigs.COMMON.enableCasingDrop.get()) {
             return;
         }
-        if (gunId == null || ModConfigs.SERVER.casingDropBlacklist.get().contains(gunId.toString())) {
+        if (gunId == null || ModConfigs.COMMON.casingDropBlacklist.get().contains(gunId.toString())) {
             return;
         }
         if (!(player.level() instanceof ServerLevel level)) {
@@ -124,7 +124,7 @@ public class CasingSpawnHandler {
      */
     private static void spawnCasingAt(ServerLevel level, LivingEntity shooter, ResourceLocation ammoId, Vec3 pos) {
         // 限制弹壳最大数量：超出时移除最早的一个。
-        int max = ModConfigs.SERVER.maxCasingCount.get();
+        int max = ModConfigs.COMMON.maxCasingCount.get();
         List<CasingEntity> existing = level.getEntitiesOfClass(CasingEntity.class,
                 new AABB(pos.x, pos.y, pos.z, pos.x, pos.y, pos.z).inflate(256.0D));
         if (existing.size() >= max) {
@@ -144,16 +144,17 @@ public class CasingSpawnHandler {
         casing.setAmmoId(ammoId);
 
         // 初速度对标原版 shell 的 initial_velocity [5,2,1]（块/秒）≈ [0.25,0.10,0.05]（块/tick），
-        // 方向为「玩家右侧 + 向上 + 前方」，并加随机扰动。
+        // 方向为「玩家右侧 + 向上 + 前方」，并叠加玩家的当前速度（移动时抛出的弹壳带有玩家动量）。
         Vec3 look = shooter.getLookAngle();
         Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
+        Vec3 playerVelocity = shooter.getDeltaMovement();
         double rightSpeed = 0.25D + (level.random.nextDouble() - 0.5D) * 0.10D;
         double upSpeed = 0.10D + (level.random.nextDouble() - 0.5D) * 0.10D;
         double forwardSpeed = 0.05D + (level.random.nextDouble() - 0.5D) * 0.05D;
         casing.setDeltaMovement(
-                right.x * rightSpeed + look.x * forwardSpeed,
-                upSpeed,
-                right.z * rightSpeed + look.z * forwardSpeed);
+                right.x * rightSpeed + look.x * forwardSpeed + playerVelocity.x,
+                upSpeed + playerVelocity.y,
+                right.z * rightSpeed + look.z * forwardSpeed + playerVelocity.z);
 
         level.addFreshEntity(casing);
     }

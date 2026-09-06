@@ -9,25 +9,25 @@ import org.apache.commons.lang3.tuple.Pair;
 import java.util.List;
 
 /**
- * Server-side configuration for the magazine-drop feature.
- * Both values live in the server config so the server is authoritative.
+ * Common configuration for the magazine/casing drop features.
+ * Lives in the common config so both sides share the same values.
  */
 public class ModConfigs {
 
-    public static final ForgeConfigSpec SERVER_SPEC;
-    public static final ServerConfig SERVER;
+    public static final ForgeConfigSpec COMMON_SPEC;
+    public static final CommonConfig COMMON;
 
     static {
-        Pair<ServerConfig, ForgeConfigSpec> pair = new ForgeConfigSpec.Builder().configure(ServerConfig::new);
-        SERVER_SPEC = pair.getRight();
-        SERVER = pair.getLeft();
+        Pair<CommonConfig, ForgeConfigSpec> pair = new ForgeConfigSpec.Builder().configure(CommonConfig::new);
+        COMMON_SPEC = pair.getRight();
+        COMMON = pair.getLeft();
     }
 
     public static void register() {
-        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, SERVER_SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, COMMON_SPEC);
     }
 
-    public static class ServerConfig {
+    public static class CommonConfig {
         /** Master switch: whether an empty-magazine reload drops a magazine at all. */
         public final ForgeConfigSpec.BooleanValue enableMagazineDrop;
         /** How many ticks a dropped magazine stays in the world before despawning. */
@@ -49,7 +49,7 @@ public class ModConfigs {
         /** 换弹时掉落弹壳（gunid|count）。 */
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> reloadCasingDrops;
 
-        public ServerConfig(ForgeConfigSpec.Builder builder) {
+        public CommonConfig(ForgeConfigSpec.Builder builder) {
             builder.push("magazine");
 
             enableMagazineDrop = builder
@@ -93,7 +93,7 @@ public class ModConfigs {
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
                                     "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr", "tacz:ai_awp|classicr:msr",
                                     "ccrp:v308|tacz:scar_h", "kpp:nemesis|classicr:msr"),
-                            ServerConfig::isModelReplacementEntry);
+                            CommonConfig::isModelReplacementEntry);
             builder.pop();
 
             builder.push("casing");
@@ -133,7 +133,7 @@ public class ModConfigs {
                                     "tacz:springfield1873|1", "kpp:870mcs|1", "kpp:870magpul_1|1", "kpp:870magpul|1", "kpp:m870_t|1",
                                     "kpp:870ll|1", "ccrp:lastwar|1", "tacz:m870|1", "tacz:spas_12|1", "hare:terminator|1", "hare:aek965|1",
                                     "ccrp:m1887_long|1", "ccrp:lmt_m203|1", "tacz:m320|1"),
-                            ServerConfig::isReloadCasingEntry);
+                            CommonConfig::isReloadCasingEntry);
             builder.pop();
 
             builder.push("debug");

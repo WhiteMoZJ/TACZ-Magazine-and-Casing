@@ -126,7 +126,7 @@ public class MagazineEntity extends AbstractDroppedEntity {
 
     @Override
     protected int despawnTicks() {
-        return ModConfigs.SERVER.magazineDespawnTicks.get();
+        return ModConfigs.COMMON.magazineDespawnTicks.get();
     }
 
     @Override
