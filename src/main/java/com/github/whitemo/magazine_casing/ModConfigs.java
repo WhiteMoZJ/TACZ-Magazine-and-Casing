@@ -163,7 +163,7 @@ public class ModConfigs {
                             "弹壳模型替换映射，每项格式为 \"原枪ID|模型枪ID|每次射击抛壳数量\"",
                             "原枪抛出的弹壳会使用模型枪的弹壳模型，且每次射击抛出指定数量的弹壳。")
                     .translation("config.magazine_casing.casingModelReplacements")
-                    .defineListAllowEmpty("casingModelReplacements", List.of("hare:dp12|tacz:m870|1", "hare:ksg|tacz:m870|1", "ccrp:mk18_mjolnir|tacz:ai_awp|1"),
+                    .defineListAllowEmpty("casingModelReplacements", List.of("hare:dp12|tacz:m870|1", "hare:ksg|tacz:m870|1"),
                             CommonConfig::isCasingReplacementEntry);
             builder.pop();
 
