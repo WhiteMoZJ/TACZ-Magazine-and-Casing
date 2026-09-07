@@ -43,7 +43,6 @@ import java.util.Set;
 public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     private static final float DROP_SCALE = 0.5F;
-    private static final String BULLET_IN_MAG = "bullet_in_mag";
     private static final String[] MAG_NODES = {"mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3"};
 
     public MagazineEntityRenderer(EntityRendererProvider.Context context) {
@@ -164,7 +163,6 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     private static Set<String> buildSkipSet(int level) {
         Set<String> skip = new HashSet<>();
-        skip.add(BULLET_IN_MAG);
         int active = Math.max(0, Math.min(level, MAG_NODES.length - 1));
         for (int i = 0; i < MAG_NODES.length; i++) {
             if (i != active) {
@@ -172,6 +170,21 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
             }
         }
         return skip;
+    }
+
+    /**
+     * 判断节点是否应跳过。子弹节点命名不统一（bullet_in_mag / bullet_in_mag2 / bullet3 等），
+     * 按「名字包含 bullet」统一跳过；弹匣变体则按精确名匹配。
+     */
+    private static boolean shouldSkip(BedrockPart part, Set<String> skip) {
+        String name = part.name;
+        if (name == null) {
+            return false;
+        }
+        if (name.toLowerCase().contains("bullet")) {
+            return true;
+        }
+        return skip.contains(name);
     }
 
     /**
@@ -196,7 +209,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
                 Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY,
                 Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY
         };
-        if (part.name != null && skip.contains(part.name)) {
+        if (shouldSkip(part, skip)) {
             return out;
         }
 
@@ -254,7 +267,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
      * non-active magazine variants).
      */
     private static void renderMagazineOnly(BedrockPart part, PoseStack poseStack, VertexConsumer buffer, int light, Set<String> skip) {
-        if (part.name != null && skip.contains(part.name)) {
+        if (shouldSkip(part, skip)) {
             return;
         }
         if (part.cubes.isEmpty() && part.children.isEmpty()) {

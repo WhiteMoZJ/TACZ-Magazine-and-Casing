@@ -43,16 +43,13 @@ public class CasingSpawnHandler {
             "pistol", 0.25D,
             "smg", 0.25D,
             "rifle", 0.35D,
-            "sniper", 0.25D,
+            "sniper", 0.35D,
             "shotgun", 0.25D,
             "mg", 0.35D,
             "rpg", 0.25D
     );
 
     private static final Double DEFAULT_RIGHT_SPEED = 0.25D;
-
-    /** 客户端算出的精确位置向玩家后方（-视线方向）的修正量，用于把弹壳生成点挪到抛壳口偏后。 */
-    private static final double BACKWARD_OFFSET = 0.25D;
 
     /** 换弹掉壳的去重标记：记录某玩家最近一次服务端掉壳的 tick 与枪械，用于屏蔽客户端换弹退壳的重复包。 */
     private record ReloadCasingMark(int tick, ResourceLocation gunId) {
@@ -110,9 +107,8 @@ public class CasingSpawnHandler {
             count = replacement.count();
         }
 
-        Vec3 adjusted = worldPos.subtract(player.getLookAngle().scale(BACKWARD_OFFSET));
         for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, player, gunId, casingAmmoId, adjusted);
+            spawnCasingAt(level, player, gunId, casingAmmoId, worldPos);
         }
     }
 

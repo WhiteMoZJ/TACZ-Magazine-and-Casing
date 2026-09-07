@@ -7,6 +7,7 @@ import com.github.whitemo.magazine_casing.network.SpawnCasingPacket;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.tacz.guns.api.item.IGun;
+import com.tacz.guns.client.event.CameraSetupEvent;
 import com.tacz.guns.client.model.BedrockGunModel;
 import com.tacz.guns.client.model.functional.ShellRender;
 import net.minecraft.client.Camera;
@@ -117,6 +118,7 @@ public class ShellRenderMixin {
     /**
      * 把 PoseStack 当前（已定位到 shell 节点）的平移换算成世界坐标。
      * 第一人称物品渲染的 PoseStack 处于相机空间：原点在相机，X 右、Y 上、Z 指向相机后方。
+     * 由于第一人称枪械使用独立的 item model FOV 渲染，Z（前后深度）需按 FOV 缩放修正。
      */
     @Unique
     private Vec3 magazineAndCasing$toWorld(PoseStack poseStack) {
@@ -129,6 +131,12 @@ public class ShellRenderMixin {
         float dx = pose.m30();
         float dy = pose.m31();
         float dz = pose.m32();
+
+        // 第一人称渲染时 item model FOV 与世界 FOV 不一致，仅对 Z（深度）做缩放修正，X/Y 不变。
+        float itemFov = CameraSetupEvent.ITEM_MODEL_FOV_DYNAMICS.get();
+        float worldFov = CameraSetupEvent.WORLD_FOV_DYNAMICS.get();
+        double fovScale = Math.tan(Math.toRadians(itemFov / 2.0D)) / Math.tan(Math.toRadians(worldFov / 2.0D));
+        dz *= (float) fovScale;
 
         Vec3 camPos = camera.getPosition();
         Vector3f forward = camera.getLookVector();
