@@ -121,7 +121,7 @@ public class CasingEntity extends AbstractDroppedEntity {
     }
     @Override
     public Entity.MovementEmission getMovementEmission() {
-        // 弹壳/弹匣掉落时不播放原版的实体脚步音。
+        // 弹壳掉落时不播放原版的实体脚步音。
         return Entity.MovementEmission.NONE;
     }
 }

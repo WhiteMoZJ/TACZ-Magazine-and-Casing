@@ -82,7 +82,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         if (model == null) {
             return;
         }
-        BedrockPart magazine = ((BedrockGunModelAccessor) model).magazineCasing$getMagazineNode();
+        BedrockPart magazine = resolveMagazineNode(model);
         if (magazine == null) {
             return;
         }
@@ -134,6 +134,32 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         renderMagazineOnly(magazine, poseStack, vertexConsumer, light, skip);
 
         poseStack.popPose();
+    }
+
+    /**
+     * 解析弹匣骨骼节点。优先取 TACZ 标准名 {@code magazine}；若为 null，
+     * 兼容拼写错误的节点名 {@code magzine}（如 ai_awp）。
+     */
+    private static BedrockPart resolveMagazineNode(BedrockGunModel model) {
+        BedrockPart magazine = ((BedrockGunModelAccessor) model).magazineCasing$getMagazineNode();
+        if (magazine != null) {
+            return magazine;
+        }
+        BedrockPart root = model.getRootNode();
+        return root == null ? null : findByName(root, "magzine");
+    }
+
+    private static BedrockPart findByName(BedrockPart part, String name) {
+        if (name.equals(part.name)) {
+            return part;
+        }
+        for (BedrockPart child : part.children) {
+            BedrockPart found = findByName(child, name);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static Set<String> buildSkipSet(int level) {

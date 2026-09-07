@@ -97,9 +97,7 @@ public class ModConfigs {
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
-                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "ccrp:mk18_mjolnir|classicr:msr",
-                                    "tacz:ai_awp|classicr:msr", "ccrp:v308|classicr:scar_mk20", "kpp:nemesis|classicr:msr",
-                                    "classicr:m82a2|tacz:m95"),
+                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "classicr:m82a2|tacz:m95"),
                             CommonConfig::isModelReplacementEntry);
             builder.pop();
 
