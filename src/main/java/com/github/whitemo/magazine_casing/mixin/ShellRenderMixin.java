@@ -2,6 +2,7 @@ package com.github.whitemo.magazine_casing.mixin;
 
 import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.client.CasingSpawnGuard;
+import com.github.whitemo.magazine_casing.client.CasingVelocity;
 import com.github.whitemo.magazine_casing.network.Networking;
 import com.github.whitemo.magazine_casing.network.SpawnCasingPacket;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -12,6 +13,7 @@ import com.tacz.guns.client.model.BedrockGunModel;
 import com.tacz.guns.client.model.functional.ShellRender;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -101,6 +103,10 @@ public class ShellRenderMixin {
             return;
         }
 
+        // 客户端依据 TACZ 状态机（shouldSlide）的据枪状态计算抛壳初速度，随包发给服务端直接采用。
+        LocalPlayer player = Minecraft.getInstance().player;
+        Vec3 velocity = player == null ? Vec3.ZERO : CasingVelocity.compute(player, gunId);
+
         for (ShellRender.Data data : SHELL_QUEUE) {
             if (data.pose == null && data.normal == null) {
                 data.normal = SENT_MARK;
@@ -109,7 +115,7 @@ public class ShellRenderMixin {
                         LOGGER.info("[Casing] SEND gun={} ts={} isSelf={} queue={}",
                                 gunId, data.timeStamp, ShellRender.isSelf, SHELL_QUEUE.size());
                     }
-                    Networking.CHANNEL.sendToServer(new SpawnCasingPacket(worldPos, gunId));
+                    Networking.CHANNEL.sendToServer(new SpawnCasingPacket(worldPos, velocity, gunId));
                 }
             }
         }

@@ -40,13 +40,13 @@ public class CasingSpawnHandler {
     private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
 
     private static final Map<String, Double> CASING_RIGHT_SPEED = Map.of(
-            "pistol", 0.25D,
-            "smg", 0.25D,
-            "rifle", 0.35D,
-            "sniper", 0.35D,
-            "shotgun", 0.25D,
-            "mg", 0.35D,
-            "rpg", 0.25D
+            "pistol", 0.35D,
+            "smg", 0.35D,
+            "rifle", 0.45D,
+            "sniper", 0.45D,
+            "shotgun", 0.35D,
+            "mg", 0.45D,
+            "rpg", 0.35D
     );
 
     private static final Double DEFAULT_RIGHT_SPEED = 0.25D;
@@ -63,9 +63,9 @@ public class CasingSpawnHandler {
     private static final Map<UUID, Integer> LAST_CASING_TICK = new HashMap<>();
 
     /**
-     * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标）。
+     * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标与初速度）。
      */
-    public static void spawnCasingFromClient(ServerPlayer player, ResourceLocation gunId, Vec3 worldPos) {
+    public static void spawnCasingFromClient(ServerPlayer player, ResourceLocation gunId, Vec3 worldPos, Vec3 velocity) {
         if (!ModConfigs.COMMON.enableCasingDrop.get()) {
             return;
         }
@@ -108,7 +108,7 @@ public class CasingSpawnHandler {
         }
 
         for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, player, gunId, casingAmmoId, worldPos);
+            spawnCasingAt(level, casingAmmoId, worldPos, velocity);
         }
     }
 
@@ -142,8 +142,10 @@ public class CasingSpawnHandler {
                 .add(right.scale(offset.right()))
                 .add(look.scale(offset.forward()));
 
+        // 换弹掉壳为服务端触发，拿不到客户端 TACZ 状态机，据枪旋转不适用（slide=false）。
+        Vec3 velocity = computeCasingVelocity(shooter, gunId, false);
         for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, shooter, gunId, casingAmmoId, pos);
+            spawnCasingAt(level, casingAmmoId, pos, velocity);
         }
 
         // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
@@ -151,10 +153,54 @@ public class CasingSpawnHandler {
     }
 
     /**
-     * 在指定世界位置生成一个弹壳实体，并施加「向右 + 向上」的初速度。
+     * 计算弹壳初速度（世界坐标）：方向为「玩家右侧 + 向上 + 前方」，并叠加玩家的当前速度。
+     * {@code slide} 表示玩家是否处于据枪（斜握）状态，此时右/上的初速度分量绕玩家视角方向
+     * （左手系 Z 轴）正向旋转 45°，与画面中手臂/枪身的旋转姿态一致。据枪状态由客户端 TACZ
+     * 状态机（shouldSlide）判定后传入，不用实体蹲伏（isCrouching）近似。
      */
-    private static void spawnCasingAt(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
-                                      ResourceLocation ammoId, Vec3 pos) {
+    public static Vec3 computeCasingVelocity(LivingEntity shooter, ResourceLocation gunId, boolean slide) {
+        Vec3 look = shooter.getLookAngle();
+        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
+        Vec3 playerVelocity = shooter.getDeltaMovement();
+        String gun = gunId.toString();
+        String gunType = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getPojo().getType())
+                .orElse("");
+
+        boolean noLateral = ModConfigs.COMMON.noLateralEjectGuns.get().contains(gun);
+        boolean reverseEject = ModConfigs.COMMON.reverseEjectGuns.get().contains(gun);
+        double rightSpeed;
+        if (noLateral) {
+            rightSpeed = 0.0D;
+        } else {
+            rightSpeed = CASING_RIGHT_SPEED.getOrDefault(gunType, DEFAULT_RIGHT_SPEED) + (shooter.getRandom().nextDouble() - 0.5D) * 0.10D;
+            if (reverseEject) {
+                rightSpeed = -rightSpeed;
+            }
+        }
+        double upSpeed = 0.15D + (shooter.getRandom().nextDouble() - 0.5D) * 0.10D;
+        double forwardSpeed = 0.05D + (shooter.getRandom().nextDouble() - 0.5D) * 0.05D;
+
+        if (slide) {
+            double rad = Math.toRadians(45.0D);
+            double cos = Math.cos(rad);
+            double sin = Math.sin(rad);
+            double newRight = rightSpeed * cos - upSpeed * sin;
+            double newUp = rightSpeed * sin + upSpeed * cos;
+            rightSpeed = newRight;
+            upSpeed = newUp;
+        }
+
+        return new Vec3(
+                right.x * rightSpeed + look.x * forwardSpeed + playerVelocity.x,
+                upSpeed + playerVelocity.y,
+                right.z * rightSpeed + look.z * forwardSpeed + playerVelocity.z);
+    }
+
+    /**
+     * 在指定世界位置生成一个弹壳实体，并施加给定的初速度。
+     */
+    private static void spawnCasingAt(ServerLevel level, ResourceLocation ammoId, Vec3 pos, Vec3 velocity) {
         // 限制弹壳最大数量：超出时移除最早的一个。
         int max = ModConfigs.COMMON.maxCasingCount.get();
         List<CasingEntity> existing = level.getEntitiesOfClass(CasingEntity.class,
@@ -174,35 +220,7 @@ public class CasingSpawnHandler {
         CasingEntity casing = new CasingEntity(ModEntities.CASING.get(), level);
         casing.setPos(pos.x, pos.y, pos.z);
         casing.setAmmoId(ammoId);
-
-        // 初速度对标原版 shell 的 initial_velocity [5,2,1]（块/秒）≈ [0.25,0.10,0.05]（块/tick），
-        // 方向为「玩家右侧 + 向上 + 前方」，并叠加玩家的当前速度（移动时抛出的弹壳带有玩家动量）。
-        Vec3 look = shooter.getLookAngle();
-        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
-        Vec3 playerVelocity = shooter.getDeltaMovement();
-        String gun = gunId.toString();
-        String gunType = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getPojo().getType())
-                .orElse("");
-
-        boolean noLateral = ModConfigs.COMMON.noLateralEjectGuns.get().contains(gun);
-        boolean reverseEject = ModConfigs.COMMON.reverseEjectGuns.get().contains(gun);
-        double rightSpeed;
-        if (noLateral) {
-            rightSpeed = 0.0D;
-        } else {
-            rightSpeed = CASING_RIGHT_SPEED.getOrDefault(gunType, DEFAULT_RIGHT_SPEED) + (level.random.nextDouble() - 0.5D) * 0.10D;
-            if (reverseEject) {
-                rightSpeed = -rightSpeed;
-            }
-        }
-        double upSpeed = 0.15D + (level.random.nextDouble() - 0.5D) * 0.10D;
-        double forwardSpeed = 0.05D + (level.random.nextDouble() - 0.5D) * 0.05D;
-        casing.setDeltaMovement(
-                right.x * rightSpeed + look.x * forwardSpeed + playerVelocity.x,
-                upSpeed + playerVelocity.y,
-                right.z * rightSpeed + look.z * forwardSpeed + playerVelocity.z);
-
+        casing.setDeltaMovement(velocity);
         level.addFreshEntity(casing);
     }
 
