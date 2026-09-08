@@ -2,6 +2,7 @@ package com.github.whitemo.magazine_casing.client;
 
 import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.event.CasingSpawnHandler;
+import com.tacz.guns.api.TimelessAPI;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
@@ -9,10 +10,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * 客户端射击抛壳的初速度计算。据枪（斜握）状态直接采用 TACZ 动画状态机的
- * shouldSlide() 评估结果（见 {@link SlideStateTracker}，由 GunAnimationStateContextMixin
- * 在 RETURN 处捕获），与画面中的手臂旋转姿态一致，不使用实体蹲伏
- * （LivingEntity.isCrouching）近似。
+ * 客户端射击抛壳的初速度计算。据枪（斜握）状态由 TACZ 状态机的据枪动画（slide）判定
+ * （见 {@link SlideStateTracker}，由 AnimationStateContextMixin 在 runAnimation 处捕获），
+ * 与画面中的手臂旋转姿态一致，不使用实体蹲伏（LivingEntity.isCrouching）近似。
  */
 public final class CasingVelocity {
 
@@ -29,6 +29,9 @@ public final class CasingVelocity {
         if (ModConfigs.COMMON.debug.get()) {
             LOGGER.info("[Casing] velocity slide={}", slide);
         }
-        return CasingSpawnHandler.computeCasingVelocity(player, gunId, slide);
+        String gunType = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getPojo().getType())
+                .orElse("");
+        return CasingSpawnHandler.computeCasingVelocity(player, gunId, gunType, slide);
     }
 }

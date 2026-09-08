@@ -114,7 +114,7 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
 
         this.setDeltaMovement(velocity);
 
-        if (velocity != Vec3.ZERO) {
+        if (velocity.lengthSqr() > 1.0E-9) {
             this.setXRot(Mth.wrapDegrees(this.getXRot() + this.spinX));
             this.setYRot(Mth.wrapDegrees(this.getYRot() + this.spinY));
             this.roll = Mth.wrapDegrees(this.roll + this.spinZ);

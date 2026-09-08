@@ -29,10 +29,11 @@ import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Renders a dropped magazine entity using the magazine bone of the gun it came
@@ -44,6 +45,20 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     private static final float DROP_SCALE = 0.5F;
     private static final String[] MAG_NODES = {"mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3"};
+
+    /** 各扩容等级（0~3）下需要跳过的弹匣变体节点名（索引对应等级）。 */
+    private static final List<Set<String>> SKIP_SETS = List.of(
+            Set.of("mag_extended_1", "mag_extended_2", "mag_extended_3"),
+            Set.of("mag_standard", "mag_extended_2", "mag_extended_3"),
+            Set.of("mag_standard", "mag_extended_1", "mag_extended_3"),
+            Set.of("mag_standard", "mag_extended_1", "mag_extended_2")
+    );
+
+    private record CenterKey(ResourceLocation gunId, ResourceLocation displayId, int level) {
+    }
+
+    /** 弹匣几何中心点缓存，避免对已静止的弹匣每帧重算包围盒。 */
+    private static final Map<CenterKey, Vector3f> CENTER_CACHE = new ConcurrentHashMap<>();
 
     public MagazineEntityRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -86,32 +101,21 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
             return;
         }
 
-        Set<String> skip = buildSkipSet(entity.getMagazineLevel());
+        int magazineLevel = entity.getMagazineLevel();
+        Set<String> skip = skipSetFor(magazineLevel);
 
         ResourceLocation texture = displayOpt.get().getModelTexture();
         VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
 
-        // Ancestry chain (root -> magazine's parent) positions the magazine in
-        // gun-model space.
-        List<BedrockPart> chain = new ArrayList<>();
-        for (BedrockPart part = magazine.getParent(); part != null; part = part.getParent()) {
-            chain.add(part);
-        }
-        Collections.reverse(chain);
-
-        // Measure the geometry bounding box so the magazine can be centred on the
-        // entity and fitted with a matching collision box.
-        PoseStack measure = new PoseStack();
-        for (BedrockPart part : chain) {
-            part.translateAndRotateAndScale(measure);
-        }
-        double[] bounds = collectBounds(magazine, measure, skip);
-        Vector3f center = boundsCenter(bounds);
+        // Ancestry chain (root -> magazine's parent) positions the magazine in gun-model space.
+        List<BedrockPart> chain = buildChain(magazine);
+        Vector3f center = CENTER_CACHE.computeIfAbsent(
+                new CenterKey(gunId, displayId, magazineLevel),
+                key -> computeCenter(magazine, chain, skip));
 
         poseStack.pushPose();
 
-        // Origin is the entity's render position (bottom of the bounding box),
-        // so move to the box centre first.
+        // Origin is the entity's render position (bottom of the bounding box), so move to the box centre first.
         poseStack.translate(entity.getBbWidth() / 2.0F, entity.getBbHeight() / 2.0F, entity.getBbWidth() / 2.0F);
 
         // Presentation scale.
@@ -161,15 +165,9 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         return null;
     }
 
-    private static Set<String> buildSkipSet(int level) {
-        Set<String> skip = new HashSet<>();
+    private static Set<String> skipSetFor(int level) {
         int active = Math.max(0, Math.min(level, MAG_NODES.length - 1));
-        for (int i = 0; i < MAG_NODES.length; i++) {
-            if (i != active) {
-                skip.add(MAG_NODES[i]);
-            }
-        }
-        return skip;
+        return SKIP_SETS.get(active);
     }
 
     /**
@@ -185,6 +183,26 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
             return true;
         }
         return skip.contains(name);
+    }
+
+    /** 从弹匣节点向上构建祖先链（root -> 弹匣父节点），用于把弹匣定位到枪模型空间。 */
+    private static List<BedrockPart> buildChain(BedrockPart magazine) {
+        List<BedrockPart> chain = new ArrayList<>();
+        for (BedrockPart part = magazine.getParent(); part != null; part = part.getParent()) {
+            chain.add(part);
+        }
+        Collections.reverse(chain);
+        return chain;
+    }
+
+    /** 计算弹匣几何中心点（枪模型空间），供缓存使用。 */
+    private static Vector3f computeCenter(BedrockPart magazine, List<BedrockPart> chain, Set<String> skip) {
+        PoseStack measure = new PoseStack();
+        for (BedrockPart part : chain) {
+            part.translateAndRotateAndScale(measure);
+        }
+        double[] bounds = collectBounds(magazine, measure, skip);
+        return boundsCenter(bounds);
     }
 
     /**

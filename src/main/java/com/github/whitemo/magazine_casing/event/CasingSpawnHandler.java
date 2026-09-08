@@ -40,13 +40,13 @@ public class CasingSpawnHandler {
     private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
 
     private static final Map<String, Double> CASING_RIGHT_SPEED = Map.of(
-            "pistol", 0.35D,
-            "smg", 0.35D,
-            "rifle", 0.45D,
-            "sniper", 0.45D,
-            "shotgun", 0.35D,
-            "mg", 0.45D,
-            "rpg", 0.35D
+            "pistol", 0.25D,
+            "smg", 0.25D,
+            "rifle", 0.35D,
+            "sniper", 0.35D,
+            "shotgun", 0.25D,
+            "mg", 0.35D,
+            "rpg", 0.25D
     );
 
     private static final Double DEFAULT_RIGHT_SPEED = 0.25D;
@@ -58,9 +58,6 @@ public class CasingSpawnHandler {
     private static final Map<UUID, ReloadCasingMark> RELOAD_CASING_MARKS = new HashMap<>();
     /** 换弹掉壳去重窗口（tick）。窗口内同一把枪的客户端退壳包会被忽略。 */
     private static final int RELOAD_CASING_WINDOW_TICKS = 60;
-
-    /** 每个玩家最近一次生成弹壳的 tick，用于在同一 tick 内去掉「主模型 + LOD 低模」各发一次造成的重复。 */
-    private static final Map<UUID, Integer> LAST_CASING_TICK = new HashMap<>();
 
     /**
      * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标与初速度）。
@@ -82,30 +79,15 @@ public class CasingSpawnHandler {
             return;
         }
 
-        // 开火去重：主模型与 LOD 低模在同一渲染帧各发一次包，同一 tick 内只生成第一个。
-        int tick = player.tickCount;
-        Integer lastTick = LAST_CASING_TICK.get(player.getUUID());
-        if (lastTick != null && lastTick == tick) {
-            return;
-        }
-        LAST_CASING_TICK.put(player.getUUID(), tick);
-
         ResourceLocation ammoId = resolveAmmoId(gunId);
         if (ammoId == null) {
             return;
         }
 
         // 弹壳模型替换 + 每次射击抛壳数量
-        ResourceLocation casingAmmoId = ammoId;
-        int count = 1;
+        ResourceLocation casingAmmoId = resolveCasingAmmoId(gunId, ammoId);
         CasingReplacement replacement = resolveCasingReplacement(gunId);
-        if (replacement != null) {
-            ResourceLocation modelAmmoId = resolveAmmoId(replacement.modelGunId());
-            if (modelAmmoId != null) {
-                casingAmmoId = modelAmmoId;
-            }
-            count = replacement.count();
-        }
+        int count = replacement == null ? 1 : replacement.count();
 
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, casingAmmoId, worldPos, velocity);
@@ -122,14 +104,7 @@ public class CasingSpawnHandler {
         }
 
         // 换弹掉壳也使用替换后的弹壳模型；数量仍由 reloadCasingDrops 决定。
-        ResourceLocation casingAmmoId = ammoId;
-        CasingReplacement replacement = resolveCasingReplacement(gunId);
-        if (replacement != null) {
-            ResourceLocation modelAmmoId = resolveAmmoId(replacement.modelGunId());
-            if (modelAmmoId != null) {
-                casingAmmoId = modelAmmoId;
-            }
-        }
+        ResourceLocation casingAmmoId = resolveCasingAmmoId(gunId, ammoId);
 
         String gunType = TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getPojo().getType())
@@ -143,7 +118,7 @@ public class CasingSpawnHandler {
                 .add(look.scale(offset.forward()));
 
         // 换弹掉壳为服务端触发，拿不到客户端 TACZ 状态机，据枪旋转不适用（slide=false）。
-        Vec3 velocity = computeCasingVelocity(shooter, gunId, false);
+        Vec3 velocity = computeCasingVelocity(shooter, gunId, gunType, false);
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, casingAmmoId, pos, velocity);
         }
@@ -156,16 +131,13 @@ public class CasingSpawnHandler {
      * 计算弹壳初速度（世界坐标）：方向为「玩家右侧 + 向上 + 前方」，并叠加玩家的当前速度。
      * {@code slide} 表示玩家是否处于据枪（斜握）状态，此时右/上的初速度分量绕玩家视角方向
      * （左手系 Z 轴）正向旋转 45°，与画面中手臂/枪身的旋转姿态一致。据枪状态由客户端 TACZ
-     * 状态机（shouldSlide）判定后传入，不用实体蹲伏（isCrouching）近似。
+     * 状态机据枪动画（slide）判定后传入。
      */
-    public static Vec3 computeCasingVelocity(LivingEntity shooter, ResourceLocation gunId, boolean slide) {
+    public static Vec3 computeCasingVelocity(LivingEntity shooter, ResourceLocation gunId, String gunType, boolean slide) {
         Vec3 look = shooter.getLookAngle();
         Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
         Vec3 playerVelocity = shooter.getDeltaMovement();
         String gun = gunId.toString();
-        String gunType = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getPojo().getType())
-                .orElse("");
 
         boolean noLateral = ModConfigs.COMMON.noLateralEjectGuns.get().contains(gun);
         boolean reverseEject = ModConfigs.COMMON.reverseEjectGuns.get().contains(gun);
@@ -232,6 +204,16 @@ public class CasingSpawnHandler {
         return TimelessAPI.getCommonGunIndex(gunId)
                 .map(index -> index.getGunData().getAmmoId())
                 .orElse(null);
+    }
+
+    /** 应用弹壳模型替换（若配置了替换），返回最终使用的弹壳模型对应的弹药 ID。 */
+    private static ResourceLocation resolveCasingAmmoId(ResourceLocation gunId, ResourceLocation ammoId) {
+        CasingReplacement replacement = resolveCasingReplacement(gunId);
+        if (replacement == null) {
+            return ammoId;
+        }
+        ResourceLocation modelAmmoId = resolveAmmoId(replacement.modelGunId());
+        return modelAmmoId != null ? modelAmmoId : ammoId;
     }
 
     private static CasingReplacement resolveCasingReplacement(ResourceLocation gunId) {
