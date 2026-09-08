@@ -115,7 +115,7 @@ public class ReloadEventHandler {
         ResourceLocation replacement = findModelReplacement(gunId);
         if (replacement != null) {
             if (ModConfigs.COMMON.debug.get()) {
-                LOGGER.debug("Empty-magazine reload: gun={} modelReplacement={}", gunId, replacement);
+                LOGGER.debug("[Magazine] Empty-magazine reload: gun={} modelReplacement={}", gunId, replacement);
             }
             modelGunId = replacement;
             modelDisplayId = null; // use the replacement gun's default magazine model
@@ -192,7 +192,7 @@ public class ReloadEventHandler {
     private static void spawnMagazine(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
                                       ResourceLocation modelGunId, ResourceLocation displayId, int magazineLevel) {
         if (ModConfigs.COMMON.debug.get()) {
-            LOGGER.info("Spawning dropped magazine: gun={} modelGun={} extendedLevel={}", gunId, modelGunId, magazineLevel);
+            LOGGER.info("[Magazine] Spawning dropped magazine: gun={} modelGun={} extendedLevel={}", gunId, modelGunId, magazineLevel);
         }
         Vec3 pos = shooter.getEyePosition().add(0.0D, -0.4D, 0.0D);
         MagazineEntity magazine = new MagazineEntity(ModEntities.MAGAZINE.get(), level);
