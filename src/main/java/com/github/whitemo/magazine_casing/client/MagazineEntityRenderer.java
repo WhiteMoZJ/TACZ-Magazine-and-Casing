@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     private static final float DROP_SCALE = 0.5F;
-    private static final String[] MAG_NODES = {"mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3"};
+    private static final String[] MAG_NODES = {"mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3", "box", "Mag"};
 
     /** 各扩容等级（0~3）下需要跳过的弹匣变体节点名（索引对应等级）。 */
     private static final List<Set<String>> SKIP_SETS = List.of(
@@ -173,13 +173,16 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     /**
      * 判断节点是否应跳过。子弹节点命名不统一（bullet_in_mag / bullet_in_mag2 / bullet3 等），
      * 按「名字包含 bullet」统一跳过；弹匣变体则按精确名匹配。
+     * 机枪等枪械的 magazine 节点下没有 mag_standard/mag_extended 变体，直接挂 box（弹药箱）
+     * 几何与 chain_anim（弹链动画）控制节点，box 正常渲染，chain_anim 整棵子树隐藏。
      */
     private static boolean shouldSkip(BedrockPart part, Set<String> skip) {
         String name = part.name;
         if (name == null) {
             return false;
         }
-        if (name.toLowerCase().contains("bullet")) {
+        String lower = name.toLowerCase();
+        if (lower.contains("bullet") || lower.contains("chain_anim")) {
             return true;
         }
         return skip.contains(name);

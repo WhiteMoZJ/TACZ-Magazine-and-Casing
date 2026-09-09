@@ -1,5 +1,6 @@
 package com.github.whitemo.magazine_casing.mixin;
 
+import com.github.whitemo.magazine_casing.MagazineAndCasing;
 import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.client.SlideStateTracker;
 import com.tacz.guns.api.client.animation.statemachine.AnimationStateContext;
@@ -20,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = AnimationStateContext.class, remap = false)
 public abstract class AnimationStateContextMixin {
 
-    private static final Logger LOGGER = LogManager.getLogger("magazine_casing");
+    private static final Logger LOGGER = LogManager.getLogger(MagazineAndCasing.MOD_ID);
 
     @Unique
     private static boolean lastSliding;
@@ -42,7 +43,7 @@ public abstract class AnimationStateContextMixin {
         SlideStateTracker.setSliding(sliding);
         if (ModConfigs.COMMON.debug.get() && sliding != lastSliding) {
             lastSliding = sliding;
-            LOGGER.info("[Casing] slide anim '{}' -> {}", name, sliding);
+            LOGGER.debug("[Casing] slide anim '{}' -> {}", name, sliding);
         }
     }
 }
