@@ -138,10 +138,14 @@ public class ShellRenderMixin {
         float dy = pose.m31();
         float dz = pose.m32();
 
-        // 第一人称渲染时 item model FOV 与世界 FOV 不一致，仅对 Z（深度）做缩放修正，X/Y 不变。
-        float itemFov = CameraSetupEvent.ITEM_MODEL_FOV_DYNAMICS.get();
-        float worldFov = CameraSetupEvent.WORLD_FOV_DYNAMICS.get();
-        double fovScale = Math.tan(Math.toRadians(itemFov / 2.0D)) / Math.tan(Math.toRadians(worldFov / 2.0D));
+        // 仅第一人称（isSelf）需要修正：第一人称时 item model 用独立 FOV 渲染，与 world FOV 不一致，
+        // 需对 Z（深度）缩放修正；第三人称按 world FOV 渲染，无需修正（fovScale 保持 1）。
+        double fovScale = 1.0D;
+        if (ShellRender.isSelf) {
+            float itemFov = CameraSetupEvent.ITEM_MODEL_FOV_DYNAMICS.get();
+            float worldFov = CameraSetupEvent.WORLD_FOV_DYNAMICS.get();
+            fovScale = Math.tan(Math.toRadians(itemFov / 2.0D)) / Math.tan(Math.toRadians(worldFov / 2.0D));
+        }
         dz *= (float) fovScale;
 
         Vec3 camPos = camera.getPosition();
