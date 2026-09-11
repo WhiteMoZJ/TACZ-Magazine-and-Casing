@@ -40,16 +40,16 @@ public class CasingSpawnHandler {
     private static final CasingOffset DEFAULT_OFFSET = new CasingOffset(1.05D, 0.28D, 0.32D);
 
     private static final Map<String, Double> CASING_RIGHT_SPEED = Map.of(
-            "pistol", 0.25D,
-            "smg", 0.25D,
+            "pistol", 0.3D,
+            "smg", 0.3D,
             "rifle", 0.35D,
             "sniper", 0.35D,
-            "shotgun", 0.25D,
+            "shotgun", 0.3D,
             "mg", 0.35D,
-            "rpg", 0.25D
+            "rpg", 0.3D
     );
 
-    private static final Double DEFAULT_RIGHT_SPEED = 0.25D;
+    private static final Double DEFAULT_RIGHT_SPEED = 0.3D;
 
     /** 换弹掉壳的去重标记：记录某玩家最近一次服务端掉壳的 tick 与枪械，用于屏蔽客户端换弹退壳的重复包。 */
     private record ReloadCasingMark(int tick, ResourceLocation gunId) {
@@ -141,16 +141,21 @@ public class CasingSpawnHandler {
 
         boolean noLateral = ModConfigs.COMMON.noLateralEjectGuns.get().contains(gun);
         boolean reverseEject = ModConfigs.COMMON.reverseEjectGuns.get().contains(gun);
+
         double rightSpeed;
+        double upSpeed;
+
         if (noLateral) {
             rightSpeed = 0.0D;
+            upSpeed = 0.0D;
         } else {
-            rightSpeed = CASING_RIGHT_SPEED.getOrDefault(gunType, DEFAULT_RIGHT_SPEED) + (shooter.getRandom().nextDouble() - 0.5D) * 0.10D;
+            rightSpeed = CASING_RIGHT_SPEED.getOrDefault(gunType, DEFAULT_RIGHT_SPEED) + (shooter.getRandom().nextDouble() - 0.5D) * 0.05D;
             if (reverseEject) {
                 rightSpeed = -rightSpeed;
             }
+            upSpeed = 0.15D + (shooter.getRandom().nextDouble() - 0.5D) * 0.05D;
         }
-        double upSpeed = 0.15D + (shooter.getRandom().nextDouble() - 0.5D) * 0.10D;
+
         double forwardSpeed = 0.05D + (shooter.getRandom().nextDouble() - 0.5D) * 0.05D;
 
         if (slide) {

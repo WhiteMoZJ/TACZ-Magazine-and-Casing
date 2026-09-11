@@ -6,22 +6,30 @@ import net.minecraftforge.fml.ModList;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class TaCZTweaksCompat {
+/**
+ * TaCZ Tweaks 兼容。以 compileOnly 依赖 + 加载时检测的方式软兼容：
+ * 未安装 TaCZ Tweaks 时 {@link #unloadAllowed()} 会提前返回，不会触碰其配置类，
+ * 因此不会出现 NoClassDefFoundError。
+ */
+public final class TaCZTweaksCompat {
     private TaCZTweaksCompat() {}
     private static final Logger LOGGER = LogManager.getLogger(MagazineAndCasing.MOD_ID);
+    private static final String MOD_ID = "tacztweaks";
+    private static boolean installed;
 
-    private static boolean isInstalled() {
-        ModList mods = ModList.get();
-        boolean load = mods != null && mods.isLoaded("tacztweaks");
-        if (load) {
-            LOGGER.debug("[Magazine & Casing] tacztweaks installed, compatibility is available");
+    public static void init() {
+        installed = ModList.get() != null && ModList.get().isLoaded(MOD_ID);
+        if (installed) {
+            LOGGER.info("[Magazine & Casing] TaCZ Tweaks detected, compatibility enabled");
+        } else {
+            LOGGER.debug("[Magazine & Casing] TaCZ Tweaks not installed, compatibility disabled");
         }
-        return load;
     }
 
     public static boolean unloadAllowed() {
-        if (!isInstalled())
+        if (!installed) {
             return false;
+        }
         return Config.Gun.INSTANCE.allowUnload() && !Config.Gun.INSTANCE.unloadBulletInBarrel();
     }
 }
