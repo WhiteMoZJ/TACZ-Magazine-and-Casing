@@ -62,7 +62,7 @@ public class ShellRenderMixin {
         if (!ModConfigs.COMMON.enableCasingDrop.get()) {
             return;
         }
-        magazineAndCasing$captureAndSend(poseStack);
+        magazineAndCasing$captureAndSend(poseStack, context);
         ci.cancel();
     }
 
@@ -72,8 +72,9 @@ public class ShellRenderMixin {
      * 因此记录已发送的弹壳，保证每个弹壳只发送一次。
      */
     @Unique
-    private void magazineAndCasing$captureAndSend(PoseStack poseStack) {
-        // 第三人称渲染弹壳时（isSelf=false）不发送，避免切换人称后主模型/LOD 再发一次导致的重复。
+    private void magazineAndCasing$captureAndSend(PoseStack poseStack, ItemDisplayContext context) {
+        // 仅本地玩家自己的枪才发送（isSelf=false 表示正在渲染其他玩家的枪）。
+        // 注意 isSelf 并不等于第一人称：第三人称渲染本地玩家自己时它同样为 true。
         if (!ShellRender.isSelf) {
             return;
         }
@@ -98,7 +99,7 @@ public class ShellRenderMixin {
             return;
         }
 
-        Vec3 worldPos = magazineAndCasing$toWorld(poseStack);
+        Vec3 worldPos = magazineAndCasing$toWorld(poseStack, context);
         if (worldPos == null) {
             return;
         }
@@ -127,7 +128,7 @@ public class ShellRenderMixin {
      * 由于第一人称枪械使用独立的 item model FOV 渲染，Z（前后深度）需按 FOV 缩放修正。
      */
     @Unique
-    private Vec3 magazineAndCasing$toWorld(PoseStack poseStack) {
+    private Vec3 magazineAndCasing$toWorld(PoseStack poseStack, ItemDisplayContext context) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.gameRenderer == null) {
             return null;
@@ -138,10 +139,14 @@ public class ShellRenderMixin {
         float dy = pose.m31();
         float dz = pose.m32();
 
-        // 仅第一人称（isSelf）需要修正：第一人称时 item model 用独立 FOV 渲染，与 world FOV 不一致，
+        // 仅第一人称需要修正：第一人称时 item model 用独立 FOV 渲染，与 world FOV 不一致，
         // 需对 Z（深度）缩放修正；第三人称按 world FOV 渲染，无需修正（fovScale 保持 1）。
+        // 这里不能用 ShellRender.isSelf 判断人称：TACZ 在 ItemInHandLayerMixin 中渲染本地玩家
+        // 自己（第三人称）时同样把 isSelf 置为 true，会让第三人称被错误套用修正而前后偏移。
+        boolean firstPerson = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
+                || context == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
         double fovScale = 1.0D;
-        if (ShellRender.isSelf) {
+        if (firstPerson) {
             float itemFov = CameraSetupEvent.ITEM_MODEL_FOV_DYNAMICS.get();
             float worldFov = CameraSetupEvent.WORLD_FOV_DYNAMICS.get();
             fovScale = Math.tan(Math.toRadians(itemFov / 2.0D)) / Math.tan(Math.toRadians(worldFov / 2.0D));
