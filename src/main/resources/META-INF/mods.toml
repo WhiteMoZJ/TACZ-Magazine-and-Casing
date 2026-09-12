@@ -36,3 +36,11 @@ description='''${mod_description}'''
     versionRange="[2.14.2,)"
     ordering="NONE"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="taczmagazines"
+    mandatory=false
+    versionRange="[0.2.0-Beta,)"
+    ordering="NONE"
+    side="BOTH"
+

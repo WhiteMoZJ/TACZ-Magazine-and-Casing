@@ -1,5 +1,6 @@
 package com.github.whitemo.magazine_casing;
 
+import com.github.whitemo.magazine_casing.compat.TaCZMagazinesCompat;
 import com.github.whitemo.magazine_casing.compat.TaCZTweaksCompat;
 import com.github.whitemo.magazine_casing.entity.ModEntities;
 import com.github.whitemo.magazine_casing.network.Networking;
@@ -25,5 +26,6 @@ public class MagazineAndCasing
 
     private void commonSetup(FMLCommonSetupEvent event) {
         TaCZTweaksCompat.init();
+        TaCZMagazinesCompat.init();
     }
 }

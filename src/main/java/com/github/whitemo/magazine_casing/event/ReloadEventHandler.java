@@ -4,6 +4,7 @@ import com.github.whitemo.magazine_casing.MagazineAndCasing;
 import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.entity.MagazineEntity;
 import com.github.whitemo.magazine_casing.entity.ModEntities;
+import com.github.whitemo.magazine_casing.compat.TaCZMagazinesCompat;
 import com.github.whitemo.magazine_casing.compat.TaCZTweaksCompat;
 import com.tacz.guns.api.TimelessAPI;
 import com.tacz.guns.api.event.common.GunReloadEvent;
@@ -16,8 +17,10 @@ import com.tacz.guns.resource.pojo.data.gun.GunData;
 import com.tacz.guns.resource.pojo.data.gun.GunReloadData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
@@ -68,9 +71,6 @@ public class ReloadEventHandler {
 
         ResourceLocation gunId = iGun.getGunId(gun);
         ResourceLocation displayId = iGun.getGunDisplayId(gun);
-        if (gunId == null) {
-            return;
-        }
 
         // 换弹时掉落弹壳（gunid|count），与弹匣掉落互相独立
         if (ModConfigs.COMMON.enableCasingDrop.get()) {
@@ -125,8 +125,19 @@ public class ReloadEventHandler {
             modelGunId = replacement;
             modelDisplayId = null; // use the replacement gun's default magazine model
         }
+        // 与 TaCZ Magazines 共存时，直接把枪内弹匣取走：它因此不会再把空弹匣归还背包，
+        // 掉落物也换成它的弹匣物品实体，不再生成本模组的弹匣模型实体。
+        // 必须在 gun.copy() 之前取走，让快照与随后切枪检测时的枪械状态一致。
+        ItemStack compatMagazine = TaCZMagazinesCompat.takeMagazine(gun,
+                iGun.getCurrentAmmoCount(gun), gunData.getAmmoId());
+        if (TaCZMagazinesCompat.isInstalled() && compatMagazine.isEmpty()) {
+            // 兼容 TaCZ Magazines 时不再生成本模组的弹匣实体：枪内没有可掉落的弹匣就不掉落。
+            return;
+        }
+
         PENDING_DROPS.put(shooter.getUUID(),
-                new PendingDrop(level, shooter.getUUID(), gunId, modelGunId, modelDisplayId, magazineLevel, gun.copy()));
+                new PendingDrop(level, shooter.getUUID(), gunId, modelGunId, modelDisplayId, magazineLevel,
+                        gun.copy(), compatMagazine));
     }
 
     private static ResourceLocation findModelReplacement(ResourceLocation gunId) {
@@ -177,11 +188,13 @@ public class ReloadEventHandler {
 
             Entity entity = pending.level.getEntity(pending.shooterId);
             if (!(entity instanceof LivingEntity shooter) || shooter.isRemoved()) {
+                cancelDrop(pending);
                 iterator.remove();
                 continue;
             }
             // Switched items (or emptied hand) during the delay — cancel.
             if (!ItemStack.isSameItemSameTags(pending.gunSnapshot, shooter.getMainHandItem())) {
+                cancelDrop(pending);
                 iterator.remove();
                 continue;
             }
@@ -190,16 +203,44 @@ public class ReloadEventHandler {
                 continue;
             }
             iterator.remove();
-            spawnMagazine(pending.level, shooter, pending.originalGunId, pending.gunId, pending.displayId, pending.magazineLevel);
+            spawnMagazine(pending.level, shooter, pending.originalGunId, pending.gunId, pending.displayId,
+                    pending.magazineLevel, pending.compatMagazine);
+        }
+    }
+
+    /**
+     * 掉落取消（切枪、玩家不在）时，把已经从枪里取出的 TaCZ Magazines 弹匣还给玩家，
+     * 否则它既不在枪里也不会掉出来，等于凭空消失。
+     */
+    private static void cancelDrop(PendingDrop pending) {
+        if (pending.compatMagazine.isEmpty()) {
+            return;
+        }
+        ServerPlayer player = pending.level.getServer() == null ? null
+                : pending.level.getServer().getPlayerList().getPlayer(pending.shooterId);
+        if (player != null) {
+            TaCZMagazinesCompat.giveBack(player, pending.compatMagazine);
         }
     }
 
     private static void spawnMagazine(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
-                                      ResourceLocation modelGunId, ResourceLocation displayId, int magazineLevel) {
+                                      ResourceLocation modelGunId, ResourceLocation displayId, int magazineLevel,
+                                      ItemStack compatMagazine) {
+        Vec3 pos = shooter.getEyePosition().add(0.0D, -0.4D, 0.0D);
+        if (!compatMagazine.isEmpty()) {
+            // TaCZ Magazines 兼容：掉落它自己的弹匣物品实体（可拾取、可再次装填）。
+            if (ModConfigs.COMMON.debug.get()) {
+                LOGGER.info("[Magazine] Spawning dropped TaCZ Magazines item: gun={} item={}",
+                        gunId, compatMagazine.getItem());
+            }
+            ItemEntity itemEntity = new ItemEntity(level, pos.x, pos.y, pos.z, compatMagazine);
+            itemEntity.setDefaultPickUpDelay();
+            level.addFreshEntity(itemEntity);
+            return;
+        }
         if (ModConfigs.COMMON.debug.get()) {
             LOGGER.info("[Magazine] Spawning dropped magazine: gun={} modelGun={} extendedLevel={}", gunId, modelGunId, magazineLevel);
         }
-        Vec3 pos = shooter.getEyePosition().add(0.0D, -0.4D, 0.0D);
         MagazineEntity magazine = new MagazineEntity(ModEntities.MAGAZINE.get(), level);
         magazine.setPos(pos.x, pos.y, pos.z);
         magazine.setGunId(modelGunId);
@@ -207,7 +248,7 @@ public class ReloadEventHandler {
         magazine.setMagazineLevel(magazineLevel);
         magazine.setDeltaMovement(
                 level.random.nextFloat() * 0.1D - 0.05D,
-                0.12D,
+                0.0D,
                 level.random.nextFloat() * 0.1D - 0.05D);
         level.addFreshEntity(magazine);
     }
@@ -227,9 +268,7 @@ public class ReloadEventHandler {
             return 0;
         }
         ResourceLocation attachmentId = attachment.getAttachmentId(extendedMag);
-        if (attachmentId == null) {
-            return 0;
-        }
+
         return TimelessAPI.getCommonAttachmentIndex(attachmentId)
                 .map(index -> index.getData().getExtendedMagLevel())
                 .orElse(0);
@@ -243,10 +282,12 @@ public class ReloadEventHandler {
         final ResourceLocation displayId;
         final int magazineLevel;
         final ItemStack gunSnapshot;
+        /** 兼容 TaCZ Magazines 时，从枪内取出、待掉落的弹匣物品；无则为空栈。 */
+        final ItemStack compatMagazine;
         int ticksLeft;
 
         PendingDrop(ServerLevel level, UUID shooterId, ResourceLocation originalGunId, ResourceLocation gunId,
-                    ResourceLocation displayId, int magazineLevel, ItemStack gunSnapshot) {
+                    ResourceLocation displayId, int magazineLevel, ItemStack gunSnapshot, ItemStack compatMagazine) {
             this.level = level;
             this.shooterId = shooterId;
             this.originalGunId = originalGunId;
@@ -254,6 +295,7 @@ public class ReloadEventHandler {
             this.displayId = displayId;
             this.magazineLevel = magazineLevel;
             this.gunSnapshot = gunSnapshot;
+            this.compatMagazine = compatMagazine;
             this.ticksLeft = DROP_DELAY_TICKS;
         }
     }

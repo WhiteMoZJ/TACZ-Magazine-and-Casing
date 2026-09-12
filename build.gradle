@@ -92,6 +92,9 @@ dependencies {
     compileOnly fg.deobf("curse.maven:yacl-667299:6336646")
     compileOnly fg.deobf("curse.maven:tacz-tweaks-1193263:8345813")
 
+    // compat tacz magazines
+    compileOnly fg.deobf("curse.maven:tacz-magazines-1504588:8536879")
+
     annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 }
 
