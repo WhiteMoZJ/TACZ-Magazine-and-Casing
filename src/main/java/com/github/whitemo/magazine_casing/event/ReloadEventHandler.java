@@ -68,9 +68,6 @@ public class ReloadEventHandler {
 
         ResourceLocation gunId = iGun.getGunId(gun);
         ResourceLocation displayId = iGun.getGunDisplayId(gun);
-        if (gunId == null) {
-            return;
-        }
 
         // 换弹时掉落弹壳（gunid|count），与弹匣掉落互相独立
         if (ModConfigs.COMMON.enableCasingDrop.get()) {
@@ -207,7 +204,7 @@ public class ReloadEventHandler {
         magazine.setMagazineLevel(magazineLevel);
         magazine.setDeltaMovement(
                 level.random.nextFloat() * 0.1D - 0.05D,
-                0.12D,
+                0.0D,
                 level.random.nextFloat() * 0.1D - 0.05D);
         level.addFreshEntity(magazine);
     }
@@ -227,9 +224,7 @@ public class ReloadEventHandler {
             return 0;
         }
         ResourceLocation attachmentId = attachment.getAttachmentId(extendedMag);
-        if (attachmentId == null) {
-            return 0;
-        }
+
         return TimelessAPI.getCommonAttachmentIndex(attachmentId)
                 .map(index -> index.getData().getExtendedMagLevel())
                 .orElse(0);

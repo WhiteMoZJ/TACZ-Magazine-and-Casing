@@ -87,9 +87,10 @@ dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
     implementation fg.deobf("curse.maven:timeless-and-classics-zero-1028108:8141310")
+
+    // compat tacztweaks
     compileOnly fg.deobf("curse.maven:yacl-667299:6336646")
     compileOnly fg.deobf("curse.maven:tacz-tweaks-1193263:8345813")
-
 
     annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 }

@@ -29,3 +29,10 @@ description='''${mod_description}'''
     versionRange="[1.1.8,)"
     ordering="NONE"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="tacztweaks"
+    mandatory=false
+    versionRange="[2.14.2,)"
+    ordering="NONE"
+    side="BOTH"
