@@ -66,6 +66,21 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     /** 弹匣几何中心点缓存，避免对已静止的弹匣每帧重算包围盒。 */
     private static final Map<CenterKey, Vector3f> CENTER_CACHE = new ConcurrentHashMap<>();
 
+    private record NodeKey(ResourceLocation gunId, ResourceLocation displayId) {
+    }
+
+    /**
+     * 弹匣节点解析缓存。标准模型直接提供 magazine 字段（O(1)，不进缓存）；只有需要全树 DFS
+     * 的兜底模型（p90 的 p90_mag_standard、ai_awp 的拼写错误节点等）才走缓存，避免每帧重复搜索。
+     */
+    private static final Map<NodeKey, Optional<BedrockPart>> NODE_CACHE = new ConcurrentHashMap<>();
+
+    /** 资源重载会重建枪械模型，缓存必须失效，否则会拿到旧模型里的节点。 */
+    public static void clearCaches() {
+        NODE_CACHE.clear();
+        CENTER_CACHE.clear();
+    }
+
     public MagazineEntityRenderer(EntityRendererProvider.Context context) {
         super(context);
         this.shadowRadius = 0.0F;
@@ -102,7 +117,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         if (model == null) {
             return;
         }
-        BedrockPart magazine = resolveMagazineNode(model);
+        BedrockPart magazine = resolveMagazineNode(model, gunId, displayId);
         if (magazine == null) {
             return;
         }
@@ -153,11 +168,18 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
      * 拼写错误的节点名 {@code magzine}（如 ai_awp）、以及没有 magazine 容器层、
      * 弹匣节点自带前缀的模型（如 p90 的 {@code p90_mag_standard}）。
      */
-    private static BedrockPart resolveMagazineNode(BedrockGunModel model) {
+    private static BedrockPart resolveMagazineNode(BedrockGunModel model, ResourceLocation gunId, ResourceLocation displayId) {
         BedrockPart magazine = ((BedrockGunModelAccessor) model).magazineCasing$getMagazineNode();
         if (magazine != null) {
             return magazine;
         }
+        // 兜底解析需要全树 DFS，结果只取决于枪械与显示模型，按这组键缓存。
+        return NODE_CACHE.computeIfAbsent(new NodeKey(gunId, displayId),
+                key -> Optional.ofNullable(searchMagazineNode(model))).orElse(null);
+    }
+
+    /** 兜底解析：先找拼写错误的 magzine 节点，再按弹匣变体名深度优先查找。 */
+    private static BedrockPart searchMagazineNode(BedrockGunModel model) {
         BedrockPart root = model.getRootNode();
         if (root == null) {
             return null;
