@@ -96,8 +96,7 @@ public class ModConfigs {
                             "原枪掉落的弹匣会使用模型来源枪的弹匣模型",
                             "例如 \"tacz:p90|ccrp:ar57\" 会让 tacz:p90 掉落 ccrp:ar57 的弹匣模型。")
                     .translation("config.magazine_casing.magazineModelReplacements")
-                    .defineListAllowEmpty("magazineModelReplacements", List.of("tacz:p90|ccrp:ar57","ccrp:p90_effen_90|ccrp:ar57",
-                                    "ccrp:p90_paw|ccrp:ar57","ccrp:p90_shround_s|ccrp:ar57", "classicr:m82a2|tacz:m95"),
+                    .defineListAllowEmpty("magazineModelReplacements", List.of("classicr:m82a2|tacz:m95"),
                             CommonConfig::isModelReplacementEntry);
             builder.pop();
 
@@ -152,7 +151,7 @@ public class ModConfigs {
                             "无横向初速抛壳的武器（弹壳没有横向初速度，如底部抛壳）")
                     .translation("config.magazine_casing.noLateralEjectGuns")
                     .defineListAllowEmpty("noLateralEjectGuns",
-                            List.of("tacz:p90", "ccrp:p90_effen_90", "ccrp:p90_paw", "ccrp:p90_shround_s", "ccrp:ar57", "classicr:dp28", "hare:terminator"),
+                            List.of("tacz:p90", "ccrp:p90_effen_90", "ccrp:p90_paw", "ccrp:p90_shround_s", "ccrp:ar57", "classicr:dp28", "hare:terminator", "tacz:m320", "ccrp:lmt_m203"),
                             value -> value instanceof String id && ResourceLocation.tryParse(id) != null);
 
             casingModelReplacements = builder

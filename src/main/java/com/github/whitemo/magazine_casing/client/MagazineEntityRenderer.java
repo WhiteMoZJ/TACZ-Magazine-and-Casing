@@ -44,15 +44,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     private static final float DROP_SCALE = 0.5F;
-    private static final String[] MAG_NODES = {"mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3", "box", "Mag"};
 
-    /** 各扩容等级（0~3）下需要跳过的弹匣变体节点名（索引对应等级）。 */
+    /**
+     * 各扩容等级（0~3）下需要跳过的弹匣变体节点名（索引对应等级）。
+     * 变体名可能带枪械前缀（如 p90 的 p90_mag_standard），匹配按「精确名或 _后缀」，见 shouldSkip。
+     */
     private static final List<Set<String>> SKIP_SETS = List.of(
             Set.of("mag_extended_1", "mag_extended_2", "mag_extended_3"),
             Set.of("mag_standard", "mag_extended_2", "mag_extended_3"),
             Set.of("mag_standard", "mag_extended_1", "mag_extended_3"),
             Set.of("mag_standard", "mag_extended_1", "mag_extended_2")
     );
+
+    /** 全部弹匣变体名。模型缺少 magazine 容器层时，用它按名字后缀定位弹匣节点（如 p90 的 p90_mag_standard）。 */
+    private static final Set<String> ALL_VARIANTS = Set.of(
+            "mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3");
 
     private record CenterKey(ResourceLocation gunId, ResourceLocation displayId, int level) {
     }
@@ -102,7 +108,10 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         }
 
         int magazineLevel = entity.getMagazineLevel();
-        Set<String> skip = skipSetFor(magazineLevel);
+        // 模型没有 magazine 容器层、弹匣节点本身就是变体名时（如 p90 的 p90_mag_standard），
+        // 变体过滤会命中根节点并把整个弹匣隐藏；这种情况放弃变体过滤，只保留子弹/弹链的隐藏。
+        Set<String> levelSkip = skipSetFor(magazineLevel);
+        Set<String> skip = matchesVariant(magazine.name, levelSkip) ? Collections.emptySet() : levelSkip;
 
         ResourceLocation texture = displayOpt.get().getModelTexture();
         VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
@@ -140,8 +149,9 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     }
 
     /**
-     * 解析弹匣骨骼节点。优先取 TACZ 标准名 {@code magazine}；若为 null，
-     * 兼容拼写错误的节点名 {@code magzine}（如 ai_awp）。
+     * 解析弹匣骨骼节点。优先取 TACZ 标准名 {@code magazine}；若为 null，依次兼容
+     * 拼写错误的节点名 {@code magzine}（如 ai_awp）、以及没有 magazine 容器层、
+     * 弹匣节点自带前缀的模型（如 p90 的 {@code p90_mag_standard}）。
      */
     private static BedrockPart resolveMagazineNode(BedrockGunModel model) {
         BedrockPart magazine = ((BedrockGunModelAccessor) model).magazineCasing$getMagazineNode();
@@ -149,7 +159,25 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
             return magazine;
         }
         BedrockPart root = model.getRootNode();
-        return root == null ? null : findByName(root, "magzine");
+        if (root == null) {
+            return null;
+        }
+        BedrockPart misspelled = findByName(root, "magzine");
+        return misspelled != null ? misspelled : findByVariantName(root);
+    }
+
+    /** 深度优先查找形如 mag_standard / xxx_mag_standard / xxx_mag_extended_N 的弹匣节点。 */
+    private static BedrockPart findByVariantName(BedrockPart part) {
+        if (matchesVariant(part.name, ALL_VARIANTS)) {
+            return part;
+        }
+        for (BedrockPart child : part.children) {
+            BedrockPart found = findByVariantName(child);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static BedrockPart findByName(BedrockPart part, String name) {
@@ -166,13 +194,15 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     }
 
     private static Set<String> skipSetFor(int level) {
-        int active = Math.max(0, Math.min(level, MAG_NODES.length - 1));
+        int active = Math.max(0, Math.min(level, SKIP_SETS.size() - 1));
         return SKIP_SETS.get(active);
     }
 
     /**
      * 判断节点是否应跳过。子弹节点命名不统一（bullet_in_mag / bullet_in_mag2 / bullet3 等），
-     * 按「名字包含 bullet」统一跳过；弹匣变体则按精确名匹配。
+     * 按「名字包含 bullet」统一跳过。
+     * 弹匣变体按「精确名或 _后缀」匹配：部分模型的变体带枪械前缀（如 p90 的
+     * p90_mag_standard / p90_mag_extended_1），只比精确名会把所有变体一起渲染出来。
      * 机枪等枪械的 magazine 节点下没有 mag_standard/mag_extended 变体，直接挂 box（弹药箱）
      * 几何与 chain_anim（弹链动画）控制节点，box 正常渲染，chain_anim 整棵子树隐藏。
      */
@@ -185,7 +215,21 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         if (lower.contains("bullet") || lower.contains("chain_anim")) {
             return true;
         }
-        return skip.contains(name);
+        return matchesVariant(name, skip);
+    }
+
+    /** 节点名是否为某个弹匣变体：精确同名，或带枪械前缀（p90_mag_standard 对应 mag_standard）。 */
+    private static boolean matchesVariant(String name, Set<String> variants) {
+        if (name == null) {
+            return false;
+        }
+        String lower = name.toLowerCase();
+        for (String variant : variants) {
+            if (lower.equals(variant) || lower.endsWith("_" + variant)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 从弹匣节点向上构建祖先链（root -> 弹匣父节点），用于把弹匣定位到枪模型空间。 */
