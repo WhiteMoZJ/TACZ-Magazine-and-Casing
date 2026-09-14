@@ -18,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
@@ -123,7 +124,8 @@ public class ReloadEventHandler {
             modelDisplayId = null; // use the replacement gun's default magazine model
         }
         PENDING_DROPS.put(shooter.getUUID(),
-                new PendingDrop(level, shooter.getUUID(), gunId, modelGunId, modelDisplayId, magazineLevel, gun.copy()));
+                new PendingDrop(level, shooter.getUUID(), gunId, modelGunId, modelDisplayId, magazineLevel,
+                        shooter instanceof Player player ? player.getInventory().selected : -1));
     }
 
     private static ResourceLocation findModelReplacement(ResourceLocation gunId) {
@@ -177,8 +179,16 @@ public class ReloadEventHandler {
                 iterator.remove();
                 continue;
             }
-            // Switched items (or emptied hand) during the delay — cancel.
-            if (!ItemStack.isSameItemSameTags(pending.gunSnapshot, shooter.getMainHandItem())) {
+            // 切换槽位或换到别的枪时取消掉落。这里只比较槽位与枪械 ID，不做整份 ItemStack 比较：
+            // 换弹过程中 TACZ 会改写枪的 NBT（膛内弹、弹量等），全量比较会把正常换弹误判成切枪。
+            if (pending.slot >= 0 && shooter instanceof Player player
+                    && player.getInventory().selected != pending.slot) {
+                iterator.remove();
+                continue;
+            }
+            ItemStack held = shooter.getMainHandItem();
+            IGun heldGun = IGun.getIGunOrNull(held);
+            if (heldGun == null || !pending.originalGunId.equals(heldGun.getGunId(held))) {
                 iterator.remove();
                 continue;
             }
@@ -237,18 +247,19 @@ public class ReloadEventHandler {
         final ResourceLocation gunId;
         final ResourceLocation displayId;
         final int magazineLevel;
-        final ItemStack gunSnapshot;
+        /** 触发换弹时玩家选中的快捷栏槽位（-1 表示非玩家，跳过槽位校验）。 */
+        final int slot;
         int ticksLeft;
 
         PendingDrop(ServerLevel level, UUID shooterId, ResourceLocation originalGunId, ResourceLocation gunId,
-                    ResourceLocation displayId, int magazineLevel, ItemStack gunSnapshot) {
+                    ResourceLocation displayId, int magazineLevel, int slot) {
             this.level = level;
             this.shooterId = shooterId;
             this.originalGunId = originalGunId;
             this.gunId = gunId;
             this.displayId = displayId;
             this.magazineLevel = magazineLevel;
-            this.gunSnapshot = gunSnapshot;
+            this.slot = slot;
             this.ticksLeft = DROP_DELAY_TICKS;
         }
     }

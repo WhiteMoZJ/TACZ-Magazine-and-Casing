@@ -10,18 +10,19 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /**
- * 客户端 -> 服务端：请求在指定世界位置生成一个弹壳实体（精确到第一人称模型），
- * 并附带客户端算好的抛壳初速度（据枪状态在客户端由 TACZ 状态机判定）。
+ * 客户端 -> 服务端：请求在指定世界位置生成一个弹壳实体（位置取自第一人称模型），
+ * 并附带据枪（斜握）状态。抛壳初速度由服务端依据据枪状态、玩家朝向与移动计算，
+ * 不再由客户端发送。
  */
 public class SpawnCasingPacket {
 
     private final Vec3 pos;
-    private final Vec3 velocity;
+    private final boolean slide;
     private final ResourceLocation gunId;
 
-    public SpawnCasingPacket(Vec3 pos, Vec3 velocity, ResourceLocation gunId) {
+    public SpawnCasingPacket(Vec3 pos, boolean slide, ResourceLocation gunId) {
         this.pos = pos;
-        this.velocity = velocity;
+        this.slide = slide;
         this.gunId = gunId;
     }
 
@@ -29,16 +30,14 @@ public class SpawnCasingPacket {
         buf.writeDouble(msg.pos.x);
         buf.writeDouble(msg.pos.y);
         buf.writeDouble(msg.pos.z);
-        buf.writeDouble(msg.velocity.x);
-        buf.writeDouble(msg.velocity.y);
-        buf.writeDouble(msg.velocity.z);
+        buf.writeBoolean(msg.slide);
         buf.writeResourceLocation(msg.gunId);
     }
 
     public static SpawnCasingPacket decode(FriendlyByteBuf buf) {
         return new SpawnCasingPacket(
                 new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble()),
-                new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble()),
+                buf.readBoolean(),
                 buf.readResourceLocation());
     }
 
@@ -46,7 +45,7 @@ public class SpawnCasingPacket {
         ctx.get().enqueueWork(() -> {
             ServerPlayer player = ctx.get().getSender();
             if (player != null) {
-                CasingSpawnHandler.spawnCasingFromClient(player, msg.gunId, msg.pos, msg.velocity);
+                CasingSpawnHandler.spawnCasingFromClient(player, msg.gunId, msg.pos, msg.slide);
             }
         });
         ctx.get().setPacketHandled(true);
