@@ -113,7 +113,7 @@ public class CasingSpawnHandler {
 
         String gunType = resolveGunType(gunId);
         Vec3 look = shooter.getLookAngle();
-        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
+        Vec3 right = horizontalRight(shooter);
         CasingOffset offset = OFFSET_BY_TYPE.getOrDefault(gunType, DEFAULT_OFFSET);
         Vec3 pos = shooter.position()
                 .add(0.0D, offset.height(), 0.0D)
@@ -131,14 +131,17 @@ public class CasingSpawnHandler {
     }
 
     /**
-     * 计算弹壳初速度（世界坐标）：方向为「玩家右侧 + 向上 + 前方」，并叠加玩家的当前速度。
+     * 计算弹壳初速度（世界坐标）：方向为「玩家右侧 + 视角上方 + 前方」，并叠加玩家的当前速度。
+     * 右/上/前构成玩家视角参考系，因此 yaw 决定横向抛出方向、pitch 除影响前向分量外还会
+     * 带动「上」分量一起倾斜（俯视时抛壳不再单纯向上，而是沿枪身法线甩出，俯仰越大差异越明显）。
      * {@code slide} 表示玩家是否处于据枪（斜握）状态，此时右/上的初速度分量绕玩家视角方向
      * （左手系 Z 轴）正向旋转 45°，与画面中手臂/枪身的旋转姿态一致。据枪状态由客户端 TACZ
      * 状态机据枪动画（slide）判定后传入。
      */
     private static Vec3 computeCasingVelocity(LivingEntity shooter, ResourceLocation gunId, String gunType, boolean slide) {
         Vec3 look = shooter.getLookAngle();
-        Vec3 right = new Vec3(-look.z, 0.0D, look.x).normalize();
+        Vec3 right = horizontalRight(shooter);
+        Vec3 up = viewUp(shooter);
         Vec3 playerVelocity = shooter.getDeltaMovement();
         String gun = gunId.toString();
 
@@ -172,9 +175,38 @@ public class CasingSpawnHandler {
         }
 
         return new Vec3(
-                right.x * rightSpeed + look.x * forwardSpeed + playerVelocity.x,
-                upSpeed + playerVelocity.y,
-                right.z * rightSpeed + look.z * forwardSpeed + playerVelocity.z);
+                right.x * rightSpeed + up.x * upSpeed + look.x * forwardSpeed + playerVelocity.x,
+                right.y * rightSpeed + up.y * upSpeed + look.y * forwardSpeed + playerVelocity.y,
+                right.z * rightSpeed + up.z * upSpeed + look.z * forwardSpeed + playerVelocity.z);
+    }
+
+    /**
+     * 水平右向量，只由视角 yaw 决定。
+     * 不能直接拿 {@code getLookAngle()} 的水平分量去推：pitch 接近 ±90°（垂直俯视/仰视）时
+     * 水平分量趋近于零，归一化会得到零向量，横向抛壳速度会被整个吞掉。
+     */
+    private static Vec3 horizontalRight(LivingEntity shooter) {
+        double yaw = viewYaw(shooter);
+        return new Vec3(-Math.cos(yaw), 0.0D, -Math.sin(yaw));
+    }
+
+    /**
+     * 视角上向量，随 pitch 倾斜：水平视角时即世界向上，俯视/仰视时逐渐倒向水平前方。
+     * 由右向量与视线叉乘得到，因此隐式跟随 pitch（视线垂直俯仰时也不会退化成零向量），
+     * 与 {@link #horizontalRight}、视线共同构成右手系，保证抛壳方向跟随枪身姿态。
+     */
+    private static Vec3 viewUp(LivingEntity shooter) {
+        return horizontalRight(shooter).cross(shooter.getLookAngle());
+    }
+
+    /**
+     * 由视线反推的视角 yaw。用视线而不是 {@code getYRot()}：玩家横向移动时身体朝向会与头部
+     * 朝向（准星方向）分离，抛壳方向应当跟随准星。视线水平分量退化时退回实体 yaw。
+     */
+    private static double viewYaw(LivingEntity shooter) {
+        Vec3 look = shooter.getLookAngle();
+        double horizontal = Math.sqrt(look.x * look.x + look.z * look.z);
+        return horizontal > 1.0E-4D ? Math.atan2(-look.x, look.z) : Math.toRadians(shooter.getYRot());
     }
 
     /**
