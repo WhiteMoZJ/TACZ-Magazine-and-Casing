@@ -10,5 +10,8 @@
   "config.magazine_casing.reloadCasingDrops": "换弹弹壳掉落",
   "config.magazine_casing.reverseEjectGuns": "反向抛壳武器",
   "config.magazine_casing.noLateralEjectGuns": "无横向抛壳武器",
-  "config.magazine_casing.casingModelReplacements": "弹壳模型替换"
+  "config.magazine_casing.casingModelReplacements": "弹壳模型替换",
+  "commands.magazine_casing.clear.casing": "已清理 %s 个弹壳实体",
+  "commands.magazine_casing.clear.magazine": "已清理 %s 个弹匣实体",
+  "commands.magazine_casing.clear.all": "已清理 %s 个弹壳/弹匣实体"
 }
