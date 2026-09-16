@@ -45,8 +45,8 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
     }
 
     /**
-     * 据枪时刚生成的弹壳紧贴枪口，而手部渲染趟在绘制前会清空深度缓冲，
-     * 枪械等于画在空白深度上，会与距离无关地盖住世界趟里的实体，看起来像「弹壳被枪吞了」。
+     * 刚生成的弹壳紧贴枪口，而手部渲染趟在绘制前会清空深度缓冲，枪械等于画在空白深度上，
+     * 会与距离无关地盖住世界趟里的实体，看起来像「弹壳被枪吞了」。
      * 这类弹壳不再走世界趟，改由手部渲染趟按世界坐标重新绘制一份（见 {@link #renderInHand}），
      * 与枪械共用同一深度空间，遮挡关系才正确。
      */
@@ -59,20 +59,28 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
     }
 
     /**
-     * 是否应由手部渲染趟绘制：刚生成（tickCount &lt; {@link #HAND_RENDER_TICKS}）+ 第一人称 + 据枪（slide）。
+     * 是否应由手部渲染趟绘制：刚生成（tickCount &lt; {@link #HAND_RENDER_TICKS}）+ 手部渲染趟确实会执行。
      * 用存活 tick 而不是距相机的距离来判定「刚生成」：抛壳点未必在相机附近（长枪管、模型差异），
-     * 纯几何判定可能整个漏掉生成瞬间，而时间窗口必然覆盖。弹壳初速度有限，10 tick 内飞不出多远，
-     * 因此这个窗口天然也是一个很宽松的距离上限。
-     * 这里必须与手部渲染趟真正会被执行的条件一致（GameRenderer#renderItemInHand 里
-     * hideGui / 旁观者时不渲染手部），否则世界趟被抑制又没有手部趟补绘，弹壳会直接消失。
+     * 纯几何判定可能整个漏掉生成瞬间，而时间窗口必然覆盖。
+     * 判定必须与手部渲染趟真正会被执行的条件一致（见 {@link #isHandPassActive}），
+     * 否则世界趟被抑制又没有手部趟补绘，弹壳会直接消失。
      */
     public static boolean shouldRenderInHand(CasingEntity casing) {
-        if (!ModConfigs.COMMON.enableCasingDrop.get() || !SlideStateTracker.isSliding()) {
+        if (!ModConfigs.COMMON.enableCasingDrop.get()) {
             return false;
         }
         if (casing.tickCount >= HAND_RENDER_TICKS) {
             return false;
         }
+        return isHandPassActive();
+    }
+
+    /**
+     * 手部渲染趟当前是否真的会被绘制。必须与 {@code GameRenderer#renderItemInHand} 的前置条件
+     * 严格对齐：hideGui、旁观者、非第一人称时它都不会调用 {@code renderHandsWithItems}，
+     * 而 {@link CasingHandRenderHandler} 只挂在那条调用链上，没有补绘的机会。
+     */
+    public static boolean isHandPassActive() {
         Minecraft mc = Minecraft.getInstance();
         if (!mc.options.getCameraType().isFirstPerson() || mc.options.hideGui) {
             return false;
@@ -83,27 +91,15 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
     @Override
     public void render(CasingEntity casing, float yaw, float partialTicks, PoseStack poseStack,
                        MultiBufferSource buffer, int light) {
-        poseStack.pushPose();
-        poseStack.translate(0.0D, casing.getBbHeight() / 2.0D, 0.0D);
-
-        // 物理翻滚（yaw/pitch/roll）。
-        poseStack.mulPose(Axis.YP.rotationDegrees(Mth.lerp(partialTicks, casing.yRotO, casing.getYRot())));
-//        poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(partialTicks, casing.xRotO, casing.getXRot())));
-        poseStack.mulPose(Axis.ZP.rotationDegrees(casing.getRenderRoll(partialTicks)));
-
-        renderShellModel(casing, poseStack, light);
-
-        poseStack.popPose();
+        drawCasing(casing, poseStack, partialTicks, light);
     }
 
     /**
-     * 在手部渲染趟（相机空间 PoseStack）里重新绘制弹壳。
+     * 在手部渲染趟（相机空间 PoseStack）里绘制弹壳。
      * 位置用 {@code ShellRenderMixin.toWorld} 的逆变换把世界坐标换回相机空间偏移：
      * dx = v·right、dy = v·up、dz = v·(-forward)/fovScale；朝向与世界趟保持一致。
      */
-    public static void renderInHand(CasingEntity casing, PoseStack poseStack, float partialTicks, int light) {
-        Minecraft mc = Minecraft.getInstance();
-        Camera camera = mc.gameRenderer.getMainCamera();
+    public static void renderInHand(CasingEntity casing, Camera camera, PoseStack poseStack, float partialTicks, int light) {
         Vec3 camPos = camera.getPosition();
         Vector3f forward = camera.getLookVector();
         Vector3f up = camera.getUpVector();
@@ -128,10 +124,22 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
 
         poseStack.pushPose();
         poseStack.translate(dx, dy, dz);
+        drawCasing(casing, poseStack, partialTicks, light);
+        poseStack.popPose();
+    }
+
+    /** 在给定 PoseStack 上绘制一具弹壳：抬高半个碰撞盒 + 物理朝向与翻滚，世界趟与手部趟共用。 */
+    private static void drawCasing(CasingEntity casing, PoseStack poseStack, float partialTicks, int light) {
+        poseStack.pushPose();
         poseStack.translate(0.0D, casing.getBbHeight() / 2.0D, 0.0D);
+
+        // 物理翻滚（yaw/pitch/roll）。
         poseStack.mulPose(Axis.YP.rotationDegrees(Mth.lerp(partialTicks, casing.yRotO, casing.getYRot())));
+//        poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(partialTicks, casing.xRotO, casing.getXRot())));
         poseStack.mulPose(Axis.ZP.rotationDegrees(casing.getRenderRoll(partialTicks)));
+
         renderShellModel(casing, poseStack, light);
+
         poseStack.popPose();
     }
 
