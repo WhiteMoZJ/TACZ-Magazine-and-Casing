@@ -94,7 +94,7 @@ public class CasingSpawnHandler {
         String gunType = resolveGunType(gunId);
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, casingAmmoId, worldPos,
-                    computeCasingVelocity(player, gunId, gunType, slide), count > 1);
+                    computeCasingVelocity(player, gunId, gunType, slide), initialCasingYaw(player), count > 1);
         }
     }
 
@@ -123,7 +123,7 @@ public class CasingSpawnHandler {
         // 换弹掉壳为服务端触发，拿不到客户端 TACZ 状态机，据枪旋转不适用（slide=false）。
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, casingAmmoId, pos,
-                    computeCasingVelocity(shooter, gunId, gunType, false), count > 1);
+                    computeCasingVelocity(shooter, gunId, gunType, false), initialCasingYaw(shooter), count > 1);
         }
 
         // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
@@ -228,9 +228,25 @@ public class CasingSpawnHandler {
     }
 
     /**
-     * 在指定世界位置生成一个弹壳实体，并施加给定的初速度。
+     * 弹壳生成时的初始朝向：与玩家准星的水平朝向一致，弹壳长轴因此指向射击方向，
+     * 而不是像以前那样随机一个角度。
+     * <p>
+     * 渲染端直接用 {@code YP(entity.getYRot())} 施加朝向，而绕 Y 轴正向旋转与 MC 的 yaw
+     * 方向相反（视线为 {@code (-sin yaw, 0, cos yaw)}），所以基准角取负号；再补 180°：
+     * 弹壳模型长轴沿局部 Z，底火（弹壳底部）在 +Z、开口在 -Z，子弹是从开口射出的，
+     * 因此让局部 -Z 对准视线，底火朝后。
+     * <p>
+     * 与抛壳初速度一样跟随准星而非身体：横向移动时两者会分离，弹壳应当跟随准星。
      */
-    private static void spawnCasingAt(ServerLevel level, ResourceLocation ammoId, Vec3 pos, Vec3 velocity, boolean spread) {
+    private static float initialCasingYaw(LivingEntity shooter) {
+        return 180.0F - (float) Math.toDegrees(viewYaw(shooter));
+    }
+
+    /**
+     * 在指定世界位置生成一个弹壳实体，施加给定的初速度与初始朝向。
+     */
+    private static void spawnCasingAt(ServerLevel level, ResourceLocation ammoId, Vec3 pos, Vec3 velocity,
+                                      float yaw, boolean spread) {
         if (spread) {
             // 一次抛多颗时给每颗一点位置偏移，避免完全重叠成一堆。
             pos = pos.add(
@@ -257,6 +273,7 @@ public class CasingSpawnHandler {
 
         CasingEntity casing = new CasingEntity(ModEntities.CASING.get(), level);
         casing.setPos(pos.x, pos.y, pos.z);
+        casing.setYRot(yaw);
         casing.setAmmoId(ammoId);
         casing.setDeltaMovement(velocity);
         level.addFreshEntity(casing);

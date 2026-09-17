@@ -1,6 +1,5 @@
 package com.github.whitemo.magazine_casing;
 
-import com.github.whitemo.magazine_casing.compat.TaCZTweaksCompat;
 import com.github.whitemo.magazine_casing.entity.ModEntities;
 import com.github.whitemo.magazine_casing.network.Networking;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -24,6 +23,5 @@ public class MagazineAndCasing
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        TaCZTweaksCompat.init();
     }
 }

@@ -55,7 +55,7 @@ public class CasingEntity extends AbstractDroppedEntity {
 
     @Override
     protected float spinYRange() {
-        return 60.0F;
+        return 30.0F;
     }
 
     @Override
@@ -106,6 +106,11 @@ public class CasingEntity extends AbstractDroppedEntity {
     @Override
     protected int despawnTicks() {
         return ModConfigs.COMMON.casingDespawnTicks.get();
+    }
+
+    @Override
+    protected Float restRollTarget() {
+        return 0.0F;
     }
 
     @Override

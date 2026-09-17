@@ -4,7 +4,6 @@ import com.github.whitemo.magazine_casing.MagazineAndCasing;
 import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.entity.MagazineEntity;
 import com.github.whitemo.magazine_casing.entity.ModEntities;
-import com.github.whitemo.magazine_casing.compat.TaCZTweaksCompat;
 import com.tacz.guns.api.TimelessAPI;
 import com.tacz.guns.api.event.common.GunReloadEvent;
 import com.tacz.guns.api.item.IAttachment;
@@ -100,14 +99,7 @@ public class ReloadEventHandler {
             return;
         }
 
-        boolean trueEmpty;
-        if (TaCZTweaksCompat.unloadAllowed() && gunData.getBolt() == Bolt.OPEN_BOLT) {
-            trueEmpty = true;
-        } else {
-            trueEmpty = !iGun.hasBulletInBarrel(gun) || gunData.getBolt() == Bolt.OPEN_BOLT;
-        }
-
-        if (!trueEmpty) {
+        if (!(!iGun.hasBulletInBarrel(gun) || gunData.getBolt() == Bolt.OPEN_BOLT)) {
             // One round still chambered: don't drop the magazine.
             return;
         }

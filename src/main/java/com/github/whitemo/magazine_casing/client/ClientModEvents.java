@@ -32,6 +32,7 @@ public class ClientModEvents {
             @Override
             protected void apply(Void unused, ResourceManager resourceManager, ProfilerFiller profiler) {
                 MagazineEntityRenderer.clearCaches();
+                CasingEntityRenderer.clearCaches();
             }
         });
     }

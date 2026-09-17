@@ -23,6 +23,9 @@ import javax.annotation.Nullable;
  */
 public abstract class AbstractDroppedEntity extends Entity implements IEntityAdditionalSpawnData {
 
+    /** 停稳后翻滚角逐 tick 朝目标角旋转的角度。 */
+    private static final float SETTLE_ROLL_STEP = 15.0F;
+
     private float spinX;
     private float spinY;
     private float spinZ;
@@ -67,6 +70,15 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
     /** 服务端存活 tick 数，超过则消失。 */
     protected abstract int despawnTicks();
 
+    /**
+     * 停稳后翻滚角要收敛到的方向（角度制，相差 180° 视为同一方向），返回 null 表示保持
+     * 落点处的随机翻滚角。默认保持原样（弹匣），需要「落地平躺」的实体覆写。
+     */
+    @Nullable
+    protected Float restRollTarget() {
+        return null;
+    }
+
     // ---- 子类数据存档钩子 ----
     protected abstract void writeExtraData(CompoundTag tag);
 
@@ -106,6 +118,7 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
             velocity = velocity.multiply(groundFriction(), 1.0D, groundFriction());
             if (velocity.lengthSqr() < restSpeedSqr()) {
                 velocity = Vec3.ZERO;
+                settleRoll();
                 this.spinX *= 0.6F;
                 this.spinY *= 0.6F;
                 this.spinZ *= 0.6F;
@@ -119,6 +132,24 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
             this.setYRot(Mth.wrapDegrees(this.getYRot() + this.spinY));
             this.roll = Mth.wrapDegrees(this.roll + this.spinZ);
         }
+    }
+
+    /**
+     * 停稳后把翻滚角朝 {@link #restRollTarget()} 收敛。目标角与当前角相差 180° 视为同一
+     * 方向（长轴不分正反），所以先折算到 ±90° 内，再按每 tick 固定角度靠近。
+     */
+    private void settleRoll() {
+        Float target = restRollTarget();
+        if (target == null) {
+            return;
+        }
+        float diff = Mth.wrapDegrees(target - this.roll);
+        if (diff > 90.0F) {
+            diff -= 180.0F;
+        } else if (diff < -90.0F) {
+            diff += 180.0F;
+        }
+        this.roll = Mth.wrapDegrees(this.roll + Mth.clamp(diff, -SETTLE_ROLL_STEP, SETTLE_ROLL_STEP));
     }
 
     private Vec3 bounce(Vec3 velocity) {
