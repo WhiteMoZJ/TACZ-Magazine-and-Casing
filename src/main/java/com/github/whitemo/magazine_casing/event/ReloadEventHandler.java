@@ -104,7 +104,7 @@ public class ReloadEventHandler {
         if (TaCZTweaksCompat.unloadAllowed() && gunData.getBolt() == Bolt.OPEN_BOLT) {
             trueEmpty = true;
         } else {
-            trueEmpty = !iGun.hasBulletInBarrel(gun);
+            trueEmpty = !iGun.hasBulletInBarrel(gun) || gunData.getBolt() == Bolt.OPEN_BOLT;
         }
 
         if (!trueEmpty) {
