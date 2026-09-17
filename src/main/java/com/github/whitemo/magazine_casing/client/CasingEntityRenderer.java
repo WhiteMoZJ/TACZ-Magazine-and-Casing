@@ -115,7 +115,12 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
     /**
      * 在手部渲染趟（相机空间 PoseStack）里绘制弹壳。
      * 位置用 {@code ShellRenderMixin.toWorld} 的逆变换把世界坐标换回相机空间偏移：
-     * dx = v·right、dy = v·up、dz = v·(-forward)/fovScale；朝向与世界趟保持一致。
+     * dx = v·right、dy = v·up、dz = v·(-forward)/fovScale。
+     * <p>
+     * 朝向不能直接在相机空间里施加：{@link #drawCasing} 里的 {@code YP(yaw)} 是世界语义的
+     * 偏航，而相机空间的上轴是相机自己的 up，直接套用会让弹壳的朝向随准星一起转（误差正好
+     * 等于准星的 yaw），表现为「弹壳黏在屏幕上而不是黏在世界里」。所以平移之后先用
+     * {@link #worldToCamera} 把局部坐标架转回世界朝向，后续变换与世界趟完全一致。
      */
     public static void renderInHand(CasingEntity casing, Camera camera, PoseStack poseStack, float partialTicks, int light) {
         Vec3 camPos = camera.getPosition();
@@ -142,8 +147,28 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
 
         poseStack.pushPose();
         poseStack.translate(dx, dy, dz);
+        poseStack.mulPoseMatrix(worldToCamera(camera));
         drawCasing(casing, poseStack, partialTicks, light);
         poseStack.popPose();
+    }
+
+    /**
+     * 世界坐标 -> 相机空间的变换矩阵，用相机基向量直接拼出，不依赖 {@code Camera#rotation()}
+     * 的四元数约定。相机空间为 X 右、Y 上、Z 指向相机后方，故三列分别为 right、up、back
+     * （right = -left、back = -forward）。把它乘进相机空间的 PoseStack 之后（世界趟的
+     * PoseStack 恰好等于相机空间的 PoseStack 再乘上这个矩阵），局部坐标架即恢复为世界朝向，
+     * {@link #drawCasing} 里的 yaw/roll/抬高就都是世界语义，与世界趟行为一致。
+     */
+    private static Matrix4f worldToCamera(Camera camera) {
+        Vector3f right = new Vector3f(camera.getLeftVector()).negate();
+        Vector3f up = camera.getUpVector();
+        Vector3f back = new Vector3f(camera.getLookVector()).negate();
+        Matrix4f matrix = new Matrix4f();
+        matrix.setColumn(0, new Vector4f(right.x, right.y, right.z, 0.0F));
+        matrix.setColumn(1, new Vector4f(up.x, up.y, up.z, 0.0F));
+        matrix.setColumn(2, new Vector4f(back.x, back.y, back.z, 0.0F));
+        matrix.setColumn(3, new Vector4f(0.0F, 0.0F, 0.0F, 1.0F));
+        return matrix;
     }
 
     /**
