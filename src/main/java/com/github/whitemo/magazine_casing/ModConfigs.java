@@ -36,6 +36,8 @@ public class ModConfigs {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> magazineDropBlacklist;
         /** Magazine model replacement map, entries of form "originalGun|modelSourceGun". */
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> magazineModelReplacements;
+        /** Magazine bone names to look up in the gun model. */
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> magazineNodeNames;
         /** Debug */
         public final ForgeConfigSpec.BooleanValue debug;
         /** 弹壳掉落总开关。 */
@@ -98,6 +100,19 @@ public class ModConfigs {
                     .translation("config.magazine_casing.magazineModelReplacements")
                     .defineListAllowEmpty("magazineModelReplacements", List.of("classicr:m82a2|tacz:m95"),
                             CommonConfig::isModelReplacementEntry);
+
+            magazineNodeNames = builder
+                    .comment("Bone names that hold the magazine geometry, looked up in order.",
+                            "An entry matches a bone with that exact name, or a bone whose name ends with \"_\" + entry",
+                            "(so \"mag_standard\" also matches p90's \"p90_mag_standard\").",
+                            "The entry matching the gun's extended magazine level is looked up first, the other entries are fallbacks.",
+                            "弹匣几何所在的骨骼名候选列表，按顺序查找",
+                            "每项按骨骼名精确匹配，或匹配以 \"_\" + 该项 结尾的骨骼名（如 \"mag_standard\" 可匹配 p90 的 \"p90_mag_standard\"）",
+                            "与枪械扩容等级对应的项会最先查找，其余项作为兜底。")
+                    .translation("config.magazine_casing.magazineNodeNames")
+                    .defineListAllowEmpty("magazineNodeNames", List.of(
+                                    "mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3", "box", "Mag", "mag"),
+                            value -> value instanceof String name && !name.isBlank());
             builder.pop();
 
             builder.push("casing");

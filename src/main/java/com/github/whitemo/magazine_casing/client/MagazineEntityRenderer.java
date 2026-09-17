@@ -1,7 +1,7 @@
 package com.github.whitemo.magazine_casing.client;
 
+import com.github.whitemo.magazine_casing.ModConfigs;
 import com.github.whitemo.magazine_casing.entity.MagazineEntity;
-import com.github.whitemo.magazine_casing.mixin.BedrockGunModelAccessor;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -45,20 +44,8 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     private static final float DROP_SCALE = 0.5F;
 
-    /**
-     * 各扩容等级（0~3）下需要跳过的弹匣变体节点名（索引对应等级）。
-     * 变体名可能带枪械前缀（如 p90 的 p90_mag_standard），匹配按「精确名或 _后缀」，见 shouldSkip。
-     */
-    private static final List<Set<String>> SKIP_SETS = List.of(
-            Set.of("mag_extended_1", "mag_extended_2", "mag_extended_3"),
-            Set.of("mag_standard", "mag_extended_2", "mag_extended_3"),
-            Set.of("mag_standard", "mag_extended_1", "mag_extended_3"),
-            Set.of("mag_standard", "mag_extended_1", "mag_extended_2")
-    );
-
-    /** 全部弹匣变体名。模型缺少 magazine 容器层时，用它按名字后缀定位弹匣节点（如 p90 的 p90_mag_standard）。 */
-    private static final Set<String> ALL_VARIANTS = Set.of(
-            "mag_standard", "mag_extended_1", "mag_extended_2", "mag_extended_3");
+    /** 扩容等级上限，对应 mag_extended_1 / _2 / _3。 */
+    private static final int MAX_EXTENDED_LEVEL = 3;
 
     private record CenterKey(ResourceLocation gunId, ResourceLocation displayId, int level) {
     }
@@ -66,12 +53,12 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     /** 弹匣几何中心点缓存，避免对已静止的弹匣每帧重算包围盒。 */
     private static final Map<CenterKey, Vector3f> CENTER_CACHE = new ConcurrentHashMap<>();
 
-    private record NodeKey(ResourceLocation gunId, ResourceLocation displayId) {
+    private record NodeKey(ResourceLocation gunId, ResourceLocation displayId, int level) {
     }
 
     /**
-     * 弹匣节点解析缓存。标准模型直接提供 magazine 字段（O(1)，不进缓存）；只有需要全树 DFS
-     * 的兜底模型（p90 的 p90_mag_standard、ai_awp 的拼写错误节点等）才走缓存，避免每帧重复搜索。
+     * 弹匣节点解析缓存。解析需要对模型全树做深度优先查找，结果只取决于枪械、显示模型与
+     * 扩容等级，缓存后每帧直接命中，不再重复搜索。
      */
     private static final Map<NodeKey, Optional<BedrockPart>> NODE_CACHE = new ConcurrentHashMap<>();
 
@@ -117,16 +104,11 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         if (model == null) {
             return;
         }
-        BedrockPart magazine = resolveMagazineNode(model, gunId, displayId);
+        int magazineLevel = entity.getMagazineLevel();
+        BedrockPart magazine = resolveMagazineNode(model, gunId, displayId, magazineLevel);
         if (magazine == null) {
             return;
         }
-
-        int magazineLevel = entity.getMagazineLevel();
-        // 模型没有 magazine 容器层、弹匣节点本身就是变体名时（如 p90 的 p90_mag_standard），
-        // 变体过滤会命中根节点并把整个弹匣隐藏；这种情况放弃变体过滤，只保留子弹/弹链的隐藏。
-        Set<String> levelSkip = skipSetFor(magazineLevel);
-        Set<String> skip = matchesVariant(magazine.name, levelSkip) ? Collections.emptySet() : levelSkip;
 
         ResourceLocation texture = displayOpt.get().getModelTexture();
         VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
@@ -135,7 +117,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         List<BedrockPart> chain = buildChain(magazine);
         Vector3f center = CENTER_CACHE.computeIfAbsent(
                 new CenterKey(gunId, displayId, magazineLevel),
-                key -> computeCenter(magazine, chain, skip));
+                key -> computeCenter(magazine, chain));
 
         poseStack.pushPose();
 
@@ -158,43 +140,31 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         for (BedrockPart part : chain) {
             part.translateAndRotateAndScale(poseStack);
         }
-        renderMagazineOnly(magazine, poseStack, vertexConsumer, light, skip);
+        renderMagazineOnly(magazine, poseStack, vertexConsumer, light);
 
         poseStack.popPose();
     }
 
     /**
-     * 解析弹匣骨骼节点。优先取 TACZ 标准名 {@code magazine}；若为 null，依次兼容
-     * 拼写错误的节点名 {@code magzine}（如 ai_awp）、以及没有 magazine 容器层、
-     * 弹匣节点自带前缀的模型（如 p90 的 {@code p90_mag_standard}）。
+     * 解析弹匣骨骼节点：按配置的候选名（magazineNodeNames）直接命中弹匣几何节点本身，
+     * 结果按枪械 / 显示模型 / 扩容等级缓存。
+     *
+     * <p>不再经过 magazine 容器层，因此不会再撞上容器下那些非弹匣的兄弟节点
+     * （chain_anim 弹链、bullet_in_mag 弹匣内子弹等），无需再按名字做过滤。</p>
      */
-    private static BedrockPart resolveMagazineNode(BedrockGunModel model, ResourceLocation gunId, ResourceLocation displayId) {
-        BedrockPart magazine = ((BedrockGunModelAccessor) model).magazineCasing$getMagazineNode();
-        if (magazine != null) {
-            return magazine;
-        }
-        // 兜底解析需要全树 DFS，结果只取决于枪械与显示模型，按这组键缓存。
-        return NODE_CACHE.computeIfAbsent(new NodeKey(gunId, displayId),
-                key -> Optional.ofNullable(searchMagazineNode(model))).orElse(null);
+    private static BedrockPart resolveMagazineNode(BedrockGunModel model, ResourceLocation gunId,
+                                                   ResourceLocation displayId, int level) {
+        return NODE_CACHE.computeIfAbsent(new NodeKey(gunId, displayId, level),
+                key -> Optional.ofNullable(searchMagazineNode(model.getRootNode(), key.level()))).orElse(null);
     }
 
-    /** 兜底解析：先找拼写错误的 magzine 节点，再按弹匣变体名深度优先查找。 */
-    private static BedrockPart searchMagazineNode(BedrockGunModel model) {
-        BedrockPart root = model.getRootNode();
+    /** 按候选顺序深度优先查找弹匣节点，全部候选都找不到时返回 null。 */
+    private static BedrockPart searchMagazineNode(BedrockPart root, int level) {
         if (root == null) {
             return null;
         }
-        BedrockPart misspelled = findByName(root, "magzine");
-        return misspelled != null ? misspelled : findByVariantName(root);
-    }
-
-    /** 深度优先查找形如 mag_standard / xxx_mag_standard / xxx_mag_extended_N 的弹匣节点。 */
-    private static BedrockPart findByVariantName(BedrockPart part) {
-        if (matchesVariant(part.name, ALL_VARIANTS)) {
-            return part;
-        }
-        for (BedrockPart child : part.children) {
-            BedrockPart found = findByVariantName(child);
+        for (String name : candidateNames(level)) {
+            BedrockPart found = findByName(root, name);
             if (found != null) {
                 return found;
             }
@@ -202,8 +172,36 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         return null;
     }
 
+    /**
+     * 候选名顺序：与扩容等级对应的变体最先查找（等级 0 为 mag_standard，等级 N 为
+     * mag_extended_N），其余候选按配置顺序兜底（box 弹药箱、Mag / mag 等没有变体的命名）。
+     */
+    private static List<String> candidateNames(int level) {
+        List<? extends String> configured = ModConfigs.COMMON.magazineNodeNames.get();
+        if (configured.isEmpty()) {
+            return List.of();
+        }
+        int active = Mth.clamp(level, 0, MAX_EXTENDED_LEVEL);
+        String preferred = active == 0 ? "mag_standard" : "mag_extended_" + active;
+        List<String> ordered = new ArrayList<>(configured.size());
+        if (configured.contains(preferred)) {
+            ordered.add(preferred);
+        }
+        for (String name : configured) {
+            if (!name.equals(preferred)) {
+                ordered.add(name);
+            }
+        }
+        return ordered;
+    }
+
+    /**
+     * 深度优先查找指定名字的节点。名字含下划线的候选（mag_standard / mag_extended_N）允许
+     * 带枪械前缀的形式，用来兼容没有 magazine 容器层、节点自带前缀的模型（p90 的
+     * p90_mag_standard）；其余候选只按精确名匹配，避免误命中 bullet_in_mag、d_mag 之类。
+     */
     private static BedrockPart findByName(BedrockPart part, String name) {
-        if (name.equals(part.name)) {
+        if (matchesName(part.name, name)) {
             return part;
         }
         for (BedrockPart child : part.children) {
@@ -215,43 +213,14 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         return null;
     }
 
-    private static Set<String> skipSetFor(int level) {
-        int active = Math.max(0, Math.min(level, SKIP_SETS.size() - 1));
-        return SKIP_SETS.get(active);
-    }
-
-    /**
-     * 判断节点是否应跳过。子弹节点命名不统一（bullet_in_mag / bullet_in_mag2 / bullet3 等），
-     * 按「名字包含 bullet」统一跳过。
-     * 弹匣变体按「精确名或 _后缀」匹配：部分模型的变体带枪械前缀（如 p90 的
-     * p90_mag_standard / p90_mag_extended_1），只比精确名会把所有变体一起渲染出来。
-     * 机枪等枪械的 magazine 节点下没有 mag_standard/mag_extended 变体，直接挂 box（弹药箱）
-     * 几何与 chain_anim（弹链动画）控制节点，box 正常渲染，chain_anim 整棵子树隐藏。
-     */
-    private static boolean shouldSkip(BedrockPart part, Set<String> skip) {
-        String name = part.name;
-        if (name == null) {
+    private static boolean matchesName(String partName, String candidate) {
+        if (partName == null) {
             return false;
         }
-        String lower = name.toLowerCase();
-        if (lower.contains("bullet") || lower.contains("chain_anim")) {
+        if (partName.equalsIgnoreCase(candidate)) {
             return true;
         }
-        return matchesVariant(name, skip);
-    }
-
-    /** 节点名是否为某个弹匣变体：精确同名，或带枪械前缀（p90_mag_standard 对应 mag_standard）。 */
-    private static boolean matchesVariant(String name, Set<String> variants) {
-        if (name == null) {
-            return false;
-        }
-        String lower = name.toLowerCase();
-        for (String variant : variants) {
-            if (lower.equals(variant) || lower.endsWith("_" + variant)) {
-                return true;
-            }
-        }
-        return false;
+        return candidate.indexOf('_') > 0 && partName.toLowerCase().endsWith("_" + candidate.toLowerCase());
     }
 
     /** 从弹匣节点向上构建祖先链（root -> 弹匣父节点），用于把弹匣定位到枪模型空间。 */
@@ -265,12 +234,12 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     }
 
     /** 计算弹匣几何中心点（枪模型空间），供缓存使用。 */
-    private static Vector3f computeCenter(BedrockPart magazine, List<BedrockPart> chain, Set<String> skip) {
+    private static Vector3f computeCenter(BedrockPart magazine, List<BedrockPart> chain) {
         PoseStack measure = new PoseStack();
         for (BedrockPart part : chain) {
             part.translateAndRotateAndScale(measure);
         }
-        double[] bounds = collectBounds(magazine, measure, skip);
+        double[] bounds = collectBounds(magazine, measure);
         return boundsCenter(bounds);
     }
 
@@ -289,16 +258,13 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
 
     /**
      * Collects the axis-aligned bounds of the magazine geometry in gun-model
-     * space, skipping nodes that are not part of the ejected magazine.
+     * space.
      */
-    private static double[] collectBounds(BedrockPart part, PoseStack stack, Set<String> skip) {
+    private static double[] collectBounds(BedrockPart part, PoseStack stack) {
         double[] out = {
                 Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY,
                 Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY
         };
-        if (shouldSkip(part, skip)) {
-            return out;
-        }
 
         stack.pushPose();
         part.translateAndRotateAndScale(stack);
@@ -325,7 +291,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         }
 
         for (BedrockPart child : part.children) {
-            double[] childBounds = collectBounds(child, stack, skip);
+            double[] childBounds = collectBounds(child, stack);
             if (childBounds[0] < out[0]) out[0] = childBounds[0];
             if (childBounds[1] < out[1]) out[1] = childBounds[1];
             if (childBounds[2] < out[2]) out[2] = childBounds[2];
@@ -349,14 +315,9 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
     }
 
     /**
-     * Renders a part subtree without mutating shared model state, skipping nodes
-     * that are not part of the ejected magazine (in-mag bullets and the
-     * non-active magazine variants).
+     * Renders a part subtree without mutating shared model state.
      */
-    private static void renderMagazineOnly(BedrockPart part, PoseStack poseStack, VertexConsumer buffer, int light, Set<String> skip) {
-        if (shouldSkip(part, skip)) {
-            return;
-        }
+    private static void renderMagazineOnly(BedrockPart part, PoseStack poseStack, VertexConsumer buffer, int light) {
         if (part.cubes.isEmpty() && part.children.isEmpty()) {
             return;
         }
@@ -365,7 +326,7 @@ public class MagazineEntityRenderer extends EntityRenderer<MagazineEntity> {
         part.translateAndRotateAndScale(poseStack);
         part.compile(poseStack.last(), buffer, light, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
         for (BedrockPart child : part.children) {
-            renderMagazineOnly(child, poseStack, buffer, light, skip);
+            renderMagazineOnly(child, poseStack, buffer, light);
         }
         poseStack.popPose();
     }

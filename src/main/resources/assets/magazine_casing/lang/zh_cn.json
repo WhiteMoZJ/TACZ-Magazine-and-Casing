@@ -3,6 +3,7 @@
   "config.magazine_casing.magazineDespawnTicks": "弹匣消失时间",
   "config.magazine_casing.magazineDropBlacklist": "弹匣掉落黑名单",
   "config.magazine_casing.magazineModelReplacements": "弹匣模型替换",
+  "config.magazine_casing.magazineNodeNames": "弹匣骨骼名列表",
   "config.magazine_casing.casingDespawnTicks": "弹壳消失时间",
   "config.magazine_casing.maxCasingCount": "弹壳最大数量",
   "config.magazine_casing.enableCasingDrop": "启用弹壳掉落",

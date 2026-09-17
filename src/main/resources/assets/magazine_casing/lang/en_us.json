@@ -3,6 +3,7 @@
   "config.magazine_casing.magazineDespawnTicks": "Magazine Despawn Ticks",
   "config.magazine_casing.magazineDropBlacklist": "Magazine Drop Blacklist",
   "config.magazine_casing.magazineModelReplacements": "Magazine Model Replacements",
+  "config.magazine_casing.magazineNodeNames": "Magazine Bone Names",
   "config.magazine_casing.casingDespawnTicks": "Casing Despawn Ticks",
   "config.magazine_casing.maxCasingCount": "Max Casing Count",
   "config.magazine_casing.enableCasingDrop": "Enable Casing Drop",

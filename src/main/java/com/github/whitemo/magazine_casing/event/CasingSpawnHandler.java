@@ -137,6 +137,9 @@ public class CasingSpawnHandler {
      * {@code slide} 表示玩家是否处于据枪（斜握）状态，此时右/上的初速度分量绕玩家视角方向
      * （左手系 Z 轴）正向旋转 45°，与画面中手臂/枪身的旋转姿态一致。据枪状态由客户端 TACZ
      * 状态机据枪动画（slide）判定后传入。
+     * <p>
+     * {@code noLateralEjectGuns}（无横向分量抛壳）的枪械只剩前向分量，此时前向方向改用
+     * {@link #horizontalLook} 的水平朝向：否则视线的 pitch 会全额参与，俯仰时弹壳被直接带偏。
      */
     private static Vec3 computeCasingVelocity(LivingEntity shooter, ResourceLocation gunId, String gunType, boolean slide) {
         Vec3 look = shooter.getLookAngle();
@@ -147,6 +150,9 @@ public class CasingSpawnHandler {
 
         boolean noLateral = ModConfigs.COMMON.noLateralEjectGuns.get().contains(gun);
         boolean reverseEject = ModConfigs.COMMON.reverseEjectGuns.get().contains(gun);
+
+        // 无横向分量时前向也取水平方向，让弹壳沿准星的水平朝向平飞，与 pitch 解耦。
+        Vec3 forward = noLateral ? horizontalLook(shooter) : look;
 
         double rightSpeed;
         double upSpeed;
@@ -175,9 +181,9 @@ public class CasingSpawnHandler {
         }
 
         return new Vec3(
-                right.x * rightSpeed + up.x * upSpeed + look.x * forwardSpeed + playerVelocity.x,
-                right.y * rightSpeed + up.y * upSpeed + look.y * forwardSpeed + playerVelocity.y,
-                right.z * rightSpeed + up.z * upSpeed + look.z * forwardSpeed + playerVelocity.z);
+                right.x * rightSpeed + up.x * upSpeed + forward.x * forwardSpeed + playerVelocity.x,
+                right.y * rightSpeed + up.y * upSpeed + forward.y * forwardSpeed + playerVelocity.y,
+                right.z * rightSpeed + up.z * upSpeed + forward.z * forwardSpeed + playerVelocity.z);
     }
 
     /**
@@ -188,6 +194,18 @@ public class CasingSpawnHandler {
     private static Vec3 horizontalRight(LivingEntity shooter) {
         double yaw = viewYaw(shooter);
         return new Vec3(-Math.cos(yaw), 0.0D, -Math.sin(yaw));
+    }
+
+    /**
+     * 水平前向量，只由视角 yaw 决定，即视线在水平面的归一化投影。
+     * 供「无横向分量抛壳」的枪械使用：这类枪的初速度只剩前向分量，若直接取
+     * {@code getLookAngle()}，pitch 会全额参与合成，俯仰时弹壳方向随之上下甩动。
+     * 取水平投影后弹壳沿准星的水平朝向平飞，与 pitch 解耦（俯视/仰视时视线水平分量
+     * 退化，此时 {@link #viewYaw} 退回实体 yaw，方向依然有定义）。
+     */
+    private static Vec3 horizontalLook(LivingEntity shooter) {
+        double yaw = viewYaw(shooter);
+        return new Vec3(-Math.sin(yaw), 0.0D, Math.cos(yaw));
     }
 
     /**

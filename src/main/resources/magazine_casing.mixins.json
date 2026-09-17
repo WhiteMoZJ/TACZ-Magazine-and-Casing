@@ -5,7 +5,6 @@
   "refmap": "magazine_casing.refmap.json",
   "mixins": [],
   "client": [
-    "BedrockGunModelAccessor",
     "ShellRenderMixin",
     "GunAnimationStateContextMixin",
     "AnimationStateContextMixin"
