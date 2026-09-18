@@ -23,8 +23,8 @@ import javax.annotation.Nullable;
  */
 public abstract class AbstractDroppedEntity extends Entity implements IEntityAdditionalSpawnData {
 
-    /** 停稳后翻滚角逐 tick 朝目标角旋转的角度。 */
-    private static final float SETTLE_ROLL_STEP = 15.0F;
+    /** 停稳后朝向角逐 tick 朝目标角旋转的角度。 */
+    private static final float SETTLE_ANGLE_STEP = 15.0F;
 
     private float spinX;
     private float spinY;
@@ -79,6 +79,15 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
         return null;
     }
 
+    /**
+     * 停稳后俯仰角要收敛到的方向（角度制，相差 180° 视为同一方向），返回 null 表示保持
+     * 落点处的随机俯仰角。默认保持原样（弹匣），需要「落地平躺」的实体覆写。
+     */
+    @Nullable
+    protected Float restPitchTarget() {
+        return null;
+    }
+
     // ---- 子类数据存档钩子 ----
     protected abstract void writeExtraData(CompoundTag tag);
 
@@ -118,7 +127,7 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
             velocity = velocity.multiply(groundFriction(), 1.0D, groundFriction());
             if (velocity.lengthSqr() < restSpeedSqr()) {
                 velocity = Vec3.ZERO;
-                settleRoll();
+                settleRotation();
                 this.spinX *= 0.6F;
                 this.spinY *= 0.6F;
                 this.spinZ *= 0.6F;
@@ -135,21 +144,29 @@ public abstract class AbstractDroppedEntity extends Entity implements IEntityAdd
     }
 
     /**
-     * 停稳后把翻滚角朝 {@link #restRollTarget()} 收敛。目标角与当前角相差 180° 视为同一
-     * 方向（长轴不分正反），所以先折算到 ±90° 内，再按每 tick 固定角度靠近。
+     * 停稳后把翻滚角与俯仰角朝各自的收敛目标靠近（{@link #restRollTarget()} /
+     * {@link #restPitchTarget()}），旋转收敛到 0 后弹壳才是真正平躺在地面上。
      */
-    private void settleRoll() {
-        Float target = restRollTarget();
-        if (target == null) {
-            return;
+    private void settleRotation() {
+        Float rollTarget = restRollTarget();
+        if (rollTarget != null) {
+            this.roll = settleAngle(this.roll, rollTarget);
         }
-        float diff = Mth.wrapDegrees(target - this.roll);
+        Float pitchTarget = restPitchTarget();
+        if (pitchTarget != null) {
+            this.setXRot(settleAngle(this.getXRot(), pitchTarget));
+        }
+    }
+
+    /** 把角度朝目标角靠近一步，目标角与当前角相差 180° 视为同一方向（长轴不分正反）。 */
+    private static float settleAngle(float current, float target) {
+        float diff = Mth.wrapDegrees(target - current);
         if (diff > 90.0F) {
             diff -= 180.0F;
         } else if (diff < -90.0F) {
             diff += 180.0F;
         }
-        this.roll = Mth.wrapDegrees(this.roll + Mth.clamp(diff, -SETTLE_ROLL_STEP, SETTLE_ROLL_STEP));
+        return Mth.wrapDegrees(current + Mth.clamp(diff, -SETTLE_ANGLE_STEP, SETTLE_ANGLE_STEP));
     }
 
     private Vec3 bounce(Vec3 velocity) {

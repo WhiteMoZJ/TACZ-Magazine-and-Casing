@@ -153,28 +153,32 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
     }
 
     /**
-     * 世界坐标 -> 相机空间的变换矩阵，用相机基向量直接拼出，不依赖 {@code Camera#rotation()}
-     * 的四元数约定。相机空间为 X 右、Y 上、Z 指向相机后方，故三列分别为 right、up、back
-     * （right = -left、back = -forward）。把它乘进相机空间的 PoseStack 之后（世界趟的
-     * PoseStack 恰好等于相机空间的 PoseStack 再乘上这个矩阵），局部坐标架即恢复为世界朝向，
-     * {@link #drawCasing} 里的 yaw/roll/抬高就都是世界语义，与世界趟行为一致。
+     * 世界坐标 -> 相机空间的旋转矩阵，用相机基向量直接拼出，不依赖 {@code Camera#rotation()}
+     * 的四元数约定。相机空间为 X 右、Y 上、Z 指向相机后方，对应世界方向 right（= -left）、
+     * up、back（= -forward），因此世界向量在相机空间的分量就是它与这三轴的投影，
+     * 即矩阵的三行：把三个基向量写成行、按列主序填入即得。
+     * <p>
+     * 方向必须是「世界 -> 相机」而不是反过来：手部渲染趟的 PoseStack 处于相机空间，
+     * 局部点 p 最终落在世界 {@code camPos + C·p}（C 为相机空间 -> 世界的矩阵），要让它与世界趟
+     * 的朝向一致就得令整体旋转为 {@code C·C⁻¹ = I}。直接用 C 会多乘一次相机旋转
+     * （等价于 C²，面朝正南/正北时恰好正确、其余方向随准星成比例偏斜）。
      */
     private static Matrix4f worldToCamera(Camera camera) {
         Vector3f right = new Vector3f(camera.getLeftVector()).negate();
         Vector3f up = camera.getUpVector();
         Vector3f back = new Vector3f(camera.getLookVector()).negate();
         Matrix4f matrix = new Matrix4f();
-        matrix.setColumn(0, new Vector4f(right.x, right.y, right.z, 0.0F));
-        matrix.setColumn(1, new Vector4f(up.x, up.y, up.z, 0.0F));
-        matrix.setColumn(2, new Vector4f(back.x, back.y, back.z, 0.0F));
+        matrix.setColumn(0, new Vector4f(right.x, up.x, back.x, 0.0F));
+        matrix.setColumn(1, new Vector4f(right.y, up.y, back.y, 0.0F));
+        matrix.setColumn(2, new Vector4f(right.z, up.z, back.z, 0.0F));
         matrix.setColumn(3, new Vector4f(0.0F, 0.0F, 0.0F, 1.0F));
         return matrix;
     }
 
     /**
      * 在给定 PoseStack 上绘制一具弹壳：抬高半个碰撞盒 + 物理朝向与翻滚，世界趟与手部趟共用。
-     * 翻滚角额外叠加平躺补偿角（见 {@link #flatRollOffset}），实体停稳后 roll 收敛到 0，
-     * 加上补偿角即正好让弹壳躺在地上。
+     * 翻滚角额外叠加平躺补偿角（见 {@link #flatRollOffset}），实体停稳后 roll 与 pitch 都收敛到
+     * 0，加上补偿角即正好让弹壳躺在地上。
      */
     private static void drawCasing(CasingEntity casing, PoseStack poseStack, float partialTicks, int light) {
         poseStack.pushPose();
@@ -182,7 +186,7 @@ public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
 
         // 物理翻滚（yaw/pitch/roll）。
         poseStack.mulPose(Axis.YP.rotationDegrees(Mth.lerp(partialTicks, casing.yRotO, casing.getYRot())));
-//        poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(partialTicks, casing.xRotO, casing.getXRot())));
+        poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(partialTicks, casing.xRotO, casing.getXRot())));
         poseStack.mulPose(Axis.ZP.rotationDegrees(casing.getRenderRoll(partialTicks) + flatRollOffset(casing)));
 
         renderShellModel(casing, poseStack, light);

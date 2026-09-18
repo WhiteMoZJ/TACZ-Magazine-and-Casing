@@ -94,7 +94,8 @@ public class CasingSpawnHandler {
         String gunType = resolveGunType(gunId);
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, casingAmmoId, worldPos,
-                    computeCasingVelocity(player, gunId, gunType, slide), initialCasingYaw(player), count > 1);
+                    computeCasingVelocity(player, gunId, gunType, slide),
+                    initialCasingYaw(player), initialCasingPitch(player), count > 1);
         }
     }
 
@@ -123,7 +124,8 @@ public class CasingSpawnHandler {
         // 换弹掉壳为服务端触发，拿不到客户端 TACZ 状态机，据枪旋转不适用（slide=false）。
         for (int i = 0; i < count; i++) {
             spawnCasingAt(level, casingAmmoId, pos,
-                    computeCasingVelocity(shooter, gunId, gunType, false), initialCasingYaw(shooter), count > 1);
+                    computeCasingVelocity(shooter, gunId, gunType, false),
+                    initialCasingYaw(shooter), initialCasingPitch(shooter), count > 1);
         }
 
         // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
@@ -243,10 +245,23 @@ public class CasingSpawnHandler {
     }
 
     /**
+     * 弹壳生成时的初始俯仰：与准星的俯仰一致，弹壳长轴因此顺着瞄准线（含上下仰角），
+     * 不只是水平方向。
+     * <p>
+     * 渲染顺序为 {@code YP(yaw) -> XP(xRot) -> ZP(roll)}，由 {@code look.y = -sin(pitch)}
+     * 反推可知取 {@code xRot = -pitch} 时模型局部 -Z（开口方向）正好落在瞄准线上，所以这里
+     * 直接用 {@code asin(look.y)} 得到 {@code -pitch}，与初速度一样取自 {@code getLookAngle}。
+     */
+    private static float initialCasingPitch(LivingEntity shooter) {
+        double y = shooter.getLookAngle().y;
+        return (float) Math.toDegrees(Math.asin(y < -1.0D ? -1.0D : Math.min(y, 1.0D)));
+    }
+
+    /**
      * 在指定世界位置生成一个弹壳实体，施加给定的初速度与初始朝向。
      */
     private static void spawnCasingAt(ServerLevel level, ResourceLocation ammoId, Vec3 pos, Vec3 velocity,
-                                      float yaw, boolean spread) {
+                                      float yaw, float pitch, boolean spread) {
         if (spread) {
             // 一次抛多颗时给每颗一点位置偏移，避免完全重叠成一堆。
             pos = pos.add(
@@ -274,6 +289,7 @@ public class CasingSpawnHandler {
         CasingEntity casing = new CasingEntity(ModEntities.CASING.get(), level);
         casing.setPos(pos.x, pos.y, pos.z);
         casing.setYRot(yaw);
+        casing.setXRot(pitch);
         casing.setAmmoId(ammoId);
         casing.setDeltaMovement(velocity);
         level.addFreshEntity(casing);

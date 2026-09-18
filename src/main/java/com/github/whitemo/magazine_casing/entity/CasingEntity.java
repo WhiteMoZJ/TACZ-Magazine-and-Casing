@@ -113,6 +113,16 @@ public class CasingEntity extends AbstractDroppedEntity {
         return 0.0F;
     }
 
+    /**
+     * 停稳后俯仰角也收敛到 0。渲染端会施加 XP(pitch)，落点处的随机俯仰角（或生成时跟随
+     * 准星的仰角）会让弹壳以倾斜姿态定格、甚至插进地面，只有俯仰归零后才配合 roll 补偿角
+     * 真正平躺。
+     */
+    @Override
+    protected Float restPitchTarget() {
+        return 0.0F;
+    }
+
     @Override
     protected void writeExtraData(CompoundTag tag) {
         tag.putString("AmmoId", this.entityData.get(AMMO_ID));
