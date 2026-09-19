@@ -15,6 +15,7 @@ import com.tacz.guns.resource.pojo.data.gun.GunData;
 import com.tacz.guns.resource.pojo.data.gun.GunReloadData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -69,11 +70,28 @@ public class ReloadEventHandler {
         ResourceLocation gunId = iGun.getGunId(gun);
         ResourceLocation displayId = iGun.getGunDisplayId(gun);
 
+        GunData gunData = TimelessAPI.getCommonGunIndex(gunId)
+                .map(index -> index.getGunData())
+                .orElse(null);
+        if (gunData == null) {
+            return;
+        }
+        if (iGun.hasBulletInBarrel(gun) && gunData.getBolt() != Bolt.OPEN_BOLT) {
+            // 闭膛枪膛内仍有一发：换弹时不抛壳，也不掉弹匣
+            return;
+        }
+
         // 换弹时掉落弹壳（gunid|count），与弹匣掉落互相独立
         if (ModConfigs.COMMON.enableCasingDrop.get()) {
             int reloadCasingCount = getReloadCasingCount(gunId);
             if (reloadCasingCount > 0 && iGun.getCurrentAmmoCount(gun) == 0) {
-                CasingSpawnHandler.dropCasings(level, shooter, gunId, reloadCasingCount);
+                if (shooter instanceof ServerPlayer player) {
+                    // 位置留待客户端的抛壳事件给出（与开火抛壳同一来源），这里只登记数量。
+                    CasingSpawnHandler.markReloadCasing(player, gunId, reloadCasingCount);
+                } else {
+                    // 生物没有客户端抛壳事件，退回按枪型近似位置掉落。
+                    CasingSpawnHandler.dropCasings(level, shooter, gunId, reloadCasingCount);
+                }
                 return; // 换弹掉壳，不再走弹匣掉落
             }
         }
@@ -83,12 +101,6 @@ public class ReloadEventHandler {
             return;
         }
 
-        GunData gunData = TimelessAPI.getCommonGunIndex(gunId)
-                .map(index -> index.getGunData())
-                .orElse(null);
-        if (gunData == null) {
-            return;
-        }
         GunReloadData reloadData = gunData.getReloadData();
         if (reloadData == null || reloadData.getType() != FeedType.MAGAZINE) {
             // Only magazine-fed guns eject a magazine.
@@ -96,11 +108,6 @@ public class ReloadEventHandler {
         }
         if (iGun.getCurrentAmmoCount(gun) != 0) {
             // Empty-magazine reload only.
-            return;
-        }
-
-        if (!(!iGun.hasBulletInBarrel(gun) || gunData.getBolt() == Bolt.OPEN_BOLT)) {
-            // One round still chambered: don't drop the magazine.
             return;
         }
 
@@ -158,7 +165,12 @@ public class ReloadEventHandler {
 
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || PENDING_DROPS.isEmpty()) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        // 等不到客户端抛壳位置的换弹抛壳在这里退回按枪型近似位置。
+        CasingSpawnHandler.tickPendingReloadCasings();
+        if (PENDING_DROPS.isEmpty()) {
             return;
         }
 

@@ -7,19 +7,20 @@ import com.tacz.guns.api.TimelessAPI;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * 生成弹壳实体。精确位置由客户端渲染时计算并通过网络包发给服务端
- * （见 {@code spawnCasingFromClient}）；换弹掉壳等服务端场景则用枪类型做近似
- * （见 {@code dropCasings}）。
+ * 生成弹壳实体。位置统一来自客户端渲染时算出的抛壳口世界坐标（见 {@code spawnCasingFromClient}，
+ * 开火与玩家换弹共用）；只有没有客户端的抛壳者（生物）才退回按枪类型近似（见 {@code dropCasings}）。
  */
 public class CasingSpawnHandler {
 
@@ -51,17 +52,57 @@ public class CasingSpawnHandler {
 
     private static final Double DEFAULT_RIGHT_SPEED = 0.3D;
 
-    /** 换弹掉壳的去重标记：记录某玩家最近一次服务端掉壳的 tick 与枪械，用于屏蔽客户端换弹退壳的重复包。 */
-    private record ReloadCasingMark(int tick, ResourceLocation gunId) {
+    /** 换弹抛壳的待处理登记：记录所在世界、触发 tick、枪械与数量，位置等客户端的抛壳事件给出。 */
+    private record PendingReloadCasing(ServerLevel level, int tick, ResourceLocation gunId, int count) {
     }
 
-    private static final Map<UUID, ReloadCasingMark> RELOAD_CASING_MARKS = new HashMap<>();
-    /** 换弹掉壳去重窗口（tick）。窗口内同一把枪的客户端退壳包会被忽略。 */
+    private static final Map<UUID, PendingReloadCasing> PENDING_RELOAD_CASINGS = new HashMap<>();
+    /** 换弹抛壳的等待窗口（tick）：窗口内没等到客户端的抛壳事件就退回按枪型近似位置掉落。 */
     private static final int RELOAD_CASING_WINDOW_TICKS = 60;
+
+    /**
+     * 登记一次换弹抛壳：只登记数量与枪械，位置优先用客户端算出抛壳口世界坐标
+     * （见 {@link #spawnCasingFromClient}），因此换弹抛壳与开火抛壳的位置来源一致；
+     * 若等不到（换弹动画没有抛壳关键帧等），由 {@link #tickPendingReloadCasings} 退回近似位置。
+     */
+    public static void markReloadCasing(ServerPlayer player, ResourceLocation gunId, int count) {
+        if (!(player.level() instanceof ServerLevel level)) {
+            return;
+        }
+        PENDING_RELOAD_CASINGS.put(player.getUUID(), new PendingReloadCasing(level, player.tickCount, gunId, count));
+    }
+
+    /**
+     * 每 tick 检查待处理的换弹抛壳：超过等待窗口仍没等到客户端的抛壳事件，就退回按枪型近似位置
+     * 掉落（与玩家的位置来源不同，只作为拿不到抛壳位置时的兜底）。
+     */
+    public static void tickPendingReloadCasings() {
+        if (PENDING_RELOAD_CASINGS.isEmpty()) {
+            return;
+        }
+        Iterator<Map.Entry<UUID, PendingReloadCasing>> iterator = PENDING_RELOAD_CASINGS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, PendingReloadCasing> entry = iterator.next();
+            PendingReloadCasing pending = entry.getValue();
+
+            Entity shooter = pending.level().getEntity(entry.getKey());
+            if (!(shooter instanceof LivingEntity living) || living.isRemoved()) {
+                iterator.remove();
+                continue;
+            }
+            if (living.tickCount - pending.tick() <= RELOAD_CASING_WINDOW_TICKS) {
+                continue;
+            }
+            iterator.remove();
+            dropCasings(pending.level(), living, pending.gunId(), pending.count());
+        }
+    }
 
     /**
      * 客户端发来的精确生成请求（第一人称模型计算出的世界坐标 + 据枪状态）。
      * 抛壳初速度由服务端依据据枪状态与玩家朝向、移动计算。
+     * 若此前登记过换弹抛壳（见 {@link #markReloadCasing}），这次的抛壳事件就是换弹抛壳，
+     * 用登记的数量生成、位置即客户端算出的抛壳口坐标。
      */
     public static void spawnCasingFromClient(ServerPlayer player, ResourceLocation gunId, Vec3 worldPos, boolean slide) {
         if (!ModConfigs.COMMON.enableCasingDrop.get()) {
@@ -74,12 +115,6 @@ public class CasingSpawnHandler {
             return;
         }
 
-        // 换弹掉壳去重：服务端已通过 dropCasings 掉过这把枪的壳，忽略窗口内客户端的重复退壳包。
-        ReloadCasingMark mark = RELOAD_CASING_MARKS.get(player.getUUID());
-        if (mark != null && player.tickCount - mark.tick() <= RELOAD_CASING_WINDOW_TICKS && mark.gunId().equals(gunId)) {
-            return;
-        }
-
         ResourceLocation ammoId = resolveAmmoId(gunId);
         if (ammoId == null) {
             return;
@@ -88,19 +123,33 @@ public class CasingSpawnHandler {
         // 弹壳模型替换 + 每次射击抛壳数量（配置只解析一次）
         CasingReplacement replacement = resolveCasingReplacement(gunId);
         ResourceLocation casingAmmoId = resolveCasingAmmoId(replacement, ammoId);
-        int count = replacement == null ? 1 : replacement.count();
 
-        // 每颗弹壳单独算一次初速度：随机扰动各不相同，多颗不会完全重叠。
+        PendingReloadCasing pending = PENDING_RELOAD_CASINGS.remove(player.getUUID());
+        if (pending != null && pending.gunId().equals(gunId)
+                && player.tickCount - pending.tick() <= RELOAD_CASING_WINDOW_TICKS) {
+            // 换弹为服务端触发，拿不到客户端 TACZ 状态机，据枪旋转不适用（slide=false）。
+            spawnCasings(level, player, gunId, casingAmmoId, worldPos, pending.count(), false);
+            return;
+        }
+
+        int count = replacement == null ? 1 : replacement.count();
+        spawnCasings(level, player, gunId, casingAmmoId, worldPos, count, slide);
+    }
+
+    /** 在同一位置生成 count 个弹壳：每颗单独算一次初速度，随机扰动各不相同，多颗不会完全重叠。 */
+    private static void spawnCasings(ServerLevel level, LivingEntity shooter, ResourceLocation gunId,
+                                     ResourceLocation casingAmmoId, Vec3 pos, int count, boolean slide) {
         String gunType = resolveGunType(gunId);
         for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, casingAmmoId, worldPos,
-                    computeCasingVelocity(player, gunId, gunType, slide),
-                    initialCasingYaw(player), initialCasingPitch(player), count > 1);
+            spawnCasingAt(level, casingAmmoId, pos,
+                    computeCasingVelocity(shooter, gunId, gunType, slide),
+                    initialCasingYaw(shooter), initialCasingPitch(shooter), count > 1);
         }
     }
 
     /**
-     * 掉落 count 个弹壳（用于换弹掉壳等服务端触发场景，位置用枪类型近似）。
+     * 按枪类型近似位置掉落 count 个弹壳。只用于没有客户端抛壳事件的抛壳者（生物）：
+     * 玩家的换弹抛壳走 {@link #markReloadCasing}，位置由客户端算出，与开火抛壳一致。
      */
     public static void dropCasings(ServerLevel level, LivingEntity shooter, ResourceLocation gunId, int count) {
         ResourceLocation ammoId = resolveAmmoId(gunId);
@@ -112,24 +161,15 @@ public class CasingSpawnHandler {
         CasingReplacement replacement = resolveCasingReplacement(gunId);
         ResourceLocation casingAmmoId = resolveCasingAmmoId(replacement, ammoId);
 
-        String gunType = resolveGunType(gunId);
         Vec3 look = shooter.getLookAngle();
         Vec3 right = horizontalRight(shooter);
-        CasingOffset offset = OFFSET_BY_TYPE.getOrDefault(gunType, DEFAULT_OFFSET);
+        CasingOffset offset = OFFSET_BY_TYPE.getOrDefault(resolveGunType(gunId), DEFAULT_OFFSET);
         Vec3 pos = shooter.position()
                 .add(0.0D, offset.height(), 0.0D)
                 .add(right.scale(offset.right()))
                 .add(look.scale(offset.forward()));
 
-        // 换弹掉壳为服务端触发，拿不到客户端 TACZ 状态机，据枪旋转不适用（slide=false）。
-        for (int i = 0; i < count; i++) {
-            spawnCasingAt(level, casingAmmoId, pos,
-                    computeCasingVelocity(shooter, gunId, gunType, false),
-                    initialCasingYaw(shooter), initialCasingPitch(shooter), count > 1);
-        }
-
-        // 记录去重标记：窗口内同一把枪的客户端换弹退壳包不再重复生成。
-        RELOAD_CASING_MARKS.put(shooter.getUUID(), new ReloadCasingMark(shooter.tickCount, gunId));
+        spawnCasings(level, shooter, gunId, casingAmmoId, pos, count, false);
     }
 
     /**

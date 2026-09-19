@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CasingEntityRenderer extends EntityRenderer<CasingEntity> {
 
     /** 弹壳生成后多少 tick 内改由手部渲染趟绘制。 */
-    public static final int HAND_RENDER_TICKS = 5;
+    public static final int HAND_RENDER_TICKS = 2;
 
     /** 弹壳「落地平躺」所需的 roll 补偿角，按弹药类型缓存（只取决于模型，算一次即可）。 */
     private static final Map<ResourceLocation, Float> FLAT_ROLL_OFFSETS = new ConcurrentHashMap<>();
